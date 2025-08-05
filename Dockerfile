@@ -1,55 +1,40 @@
-# Imagen base de Python
 FROM python:3.11-slim
 
-# Evita que Python guarde archivos pyc
+# Evitar archivos .pyc y forzar logs visibles
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Actualizar sistema y paquetes necesarios para Selenium + Chrome
+# Instalar herramientas necesarias del sistema
 RUN apt-get update && apt-get install -y \
-    wget \
-    unzip \
-    curl \
-    gnupg \
-    libglib2.0-0 \
-    libnss3 \
-    libgconf-2-4 \
-    libfontconfig1 \
-    libxss1 \
-    libappindicator1 \
-    libindicator7 \
-    fonts-liberation \
-    libatk-bridge2.0-0 \
-    libgtk-3-0 \
-    --no-install-recommends && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    wget unzip curl gnupg ca-certificates \
+    libnss3 libgconf-2-4 libfontconfig1 libxss1 libappindicator1 libgtk-3-0 \
+    libglib2.0-0 libatk-bridge2.0-0 libasound2 libdbus-glib-1-2 \
+    fonts-liberation xvfb --no-install-recommends && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Descargar e instalar Google Chrome
-RUN wget -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
-    apt install -y ./chrome.deb && \
-    rm chrome.deb
+# Instalar Google Chrome
+RUN wget -q -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
+    apt install -y ./chrome.deb && rm chrome.deb
 
-# Instalar ChromeDriver que coincida con la versión de Chrome instalada
-RUN CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+') && \
-    DRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" \
-    | grep -B 10 $CHROME_VERSION | grep "version" | head -1 | cut -d '"' -f 4) && \
-    wget -O chromedriver.zip "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${DRIVER_VERSION}/linux64/chromedriver-linux64.zip" && \
+# Instalar ChromeDriver versión compatible (ejemplo con versión 120)
+RUN CHROMEDRIVER_VERSION=120.0.6099.109 && \
+    wget -q -O chromedriver.zip "https://storage.googleapis.com/chrome-for-testing-public/${CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip" && \
     unzip chromedriver.zip && \
-    mv chromedriver-linux64/chromedriver /usr/bin/chromedriver && \
-    chmod +x /usr/bin/chromedriver && \
-    rm -rf chromedriver*
+    mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver && \
+    chmod +x /usr/local/bin/chromedriver && \
+    rm -rf chromedriver.zip chromedriver-linux64
 
-# Crear carpeta de trabajo
+# Establecer directorio de trabajo
 WORKDIR /app
 
-# Copiar archivos del proyecto
+# Copiar archivos
 COPY . /app
 
-# Instalar dependencias
+# Instalar dependencias Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Comando para ejecutar el bot
+# Ejecutar script principal
 CMD ["python", "subte_alerta.py"]
+
 
 
