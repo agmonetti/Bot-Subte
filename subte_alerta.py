@@ -1,4 +1,3 @@
-
 import re
 import requests
 from selenium import webdriver
@@ -11,10 +10,8 @@ import time
 # ========================
 TELEGRAM_TOKEN = '8366284760:AAHO74Vc58mScw9iVZ7uyjoWwc9iioKMcB8'
 TELEGRAM_CHAT_ID = '6404690721'
-
-
-# 🔁 Cuando sepas el texto exacto del estado normal, reemplazalo acá:
-ESTADO_NORMAL = "Normal"  # <- ⚠️ CAMBIALO cuando lo confirmes
+INTERVALO_EJECUCION = 5400  # 1.5 horas en segundos
+ESTADO_NORMAL = "Normal" 
 
 
 # ========================
@@ -217,8 +214,12 @@ def enviar_alerta_telegram(cambios):
 # EJECUCIÓN PRINCIPAL
 # ========================
 
-def main():
+def verificar_estados():
+    """
+    Función que ejecuta la verificación de estados y envío de alertas.
+    """
     try:
+        print(f"⏱️ Iniciando verificación - {time.strftime('%Y-%m-%d %H:%M:%S')}")
         estados = obtener_estado_subte()
         print(f"Estados obtenidos: {estados}")  # Agregado para depuración
         
@@ -248,6 +249,25 @@ def main():
             print("✅ Todo funciona normalmente.")
     except Exception as e:
         print(f"❌ Error: {e}")
+
+
+def main():
+    """
+    Función principal que ejecuta el programa en bucle con espera.
+    """
+    print("🚀 Iniciando Bot de Alertas del Subte")
+    print(f"⏰ Configurado para ejecutarse cada {INTERVALO_EJECUCION//60} minutos")
+    
+    while True:
+        verificar_estados()
+        
+        # Mostrar cuándo será la próxima ejecución
+        proxima_ejecucion = time.strftime('%Y-%m-%d %H:%M:%S', 
+                                          time.localtime(time.time() + INTERVALO_EJECUCION))
+        print(f"💤 Esperando hasta la próxima ejecución ({proxima_ejecucion})...")
+        
+        # Esperar el intervalo configurado
+        time.sleep(INTERVALO_EJECUCION)
 
 if __name__ == "__main__":
     main()
