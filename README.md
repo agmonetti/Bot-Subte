@@ -13,6 +13,7 @@ Este proyecto es un bot automatizado que monitorea el estado de las líneas del 
 - Python 3.10+
 - Docker (opcional, recomendado para facilitar la ejecución)
 - Un bot de Telegram y el ID de chat donde enviar las alertas
+- Hosteo local / Nube
 
 ## Instalación y uso
 
