@@ -53,5 +53,3 @@ Desarrollado por Agustin Monetti.
 Basado en información pública de EMOVA.
 
 ---
-
-¡Contribuciones y sugerencias son
