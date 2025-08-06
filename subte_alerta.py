@@ -46,145 +46,70 @@ def obtener_estado_subte():
             f.write(html_content)
         print("HTML guardado en subte_debug.html para análisis")
         
-        # Método 1: Intentar selectores específicos conocidos
-        selectores_posibles = [
-            '.estadoLinea',
-            '.line-status',
-            '.estado-linea', 
-            '.linea',
-            '.subway-line',
-            '[class*="estado"]',
-            '[class*="linea"]',
-            '[class*="line"]'
-        ]
+        # Obtener el texto completo de la página
+        page_text = driver.execute_script("return document.body.innerText;")
+        print("Contenido de la página (primeros 1000 caracteres):")
+        print(page_text[:1000])
+        print("\n--- FIN DEL CONTENIDO ---")
         
-        bloques_encontrados = []
-        for selector in selectores_posibles:
-            try:
-                bloques = driver.find_elements(By.CSS_SELECTOR, selector)
-                if bloques:
-                    print(f"Encontrados {len(bloques)} elementos con selector: {selector}")
-                    bloques_encontrados = bloques
-                    break
-            except:
-                continue
+        # Método robusto: Extraer estados basándose en el patrón del contenido
+        lines = page_text.split('\n')
+        lineas_subte = ['A', 'B', 'C', 'D', 'E', 'H']
+        estado_index = 0
         
-        # Método 2: Si no encontramos con selectores específicos, buscar por texto
-        if not bloques_encontrados:
-            print("Buscando elementos por contenido de texto...")
+        i = 0
+        while i < len(lines) and estado_index < len(lineas_subte):
+            line = lines[i].strip()
             
-            # Buscar todos los elementos que contengan letras de líneas de subte
-            all_elements = driver.find_elements(By.XPATH, "//*[contains(text(), 'A') or contains(text(), 'B') or contains(text(), 'C') or contains(text(), 'D') or contains(text(), 'E') or contains(text(), 'H')]")
+            # Si es un estado estándar
+            if line in ['Normal', 'Limitado', 'Demora', 'Interrumpido', 'Suspendido', 'Sin servicio']:
+                linea_nombre = f"Línea {lineas_subte[estado_index]}"
+                estados[linea_nombre] = line
+                print(f"Extraído - {linea_nombre}: {line}")
+                estado_index += 1
             
-            for element in all_elements:
-                try:
-                    text = element.text.strip()
-                    if text and len(text) < 50:  # Filtrar elementos con poco texto
-                        # Buscar si contiene una línea específica
-                        for linea in ['A', 'B', 'C', 'D', 'E', 'H']:
-                            if linea in text:
-                                print(f"Elemento encontrado con línea {linea}: {text}")
-                                
-                                # Buscar el estado en el mismo elemento o elementos cercanos
-                                estado_encontrado = None
-                                
-                                # Estados posibles
-                                estados_posibles = ['Normal', 'Limitado', 'Demora', 'Interrumpido', 'Suspendido', 'Sin servicio']
-                                
-                                # Buscar en el mismo elemento
-                                for estado_pos in estados_posibles:
-                                    if estado_pos.lower() in text.lower():
-                                        estado_encontrado = estado_pos
-                                        break
-                                
-                                # Si no se encontró en el mismo elemento, buscar en elementos hermanos
-                                if not estado_encontrado:
-                                    try:
-                                        parent = element.find_element(By.XPATH, "..")
-                                        parent_text = parent.text.strip()
-                                        for estado_pos in estados_posibles:
-                                            if estado_pos.lower() in parent_text.lower():
-                                                estado_encontrado = estado_pos
-                                                break
-                                    except:
-                                        pass
-                                
-                                # Si aún no se encontró, usar "Normal" como default
-                                if not estado_encontrado:
-                                    estado_encontrado = "Normal"
-                                
-                                estados[f"Línea {linea}"] = estado_encontrado
-                                print(f"Agregado - Línea {linea}: {estado_encontrado}")
-                                break
-                except:
-                    continue
+            # Si es una descripción de problema (líneas largas con texto descriptivo)
+            elif (len(line) > 10 and 
+                  estado_index < len(lineas_subte) and
+                  any(keyword in line.lower() for keyword in 
+                      ["no se detienen", "operativo", "demora", "interrumpido", 
+                       "suspendido", "limitado", "sin servicio", "problema", 
+                       "cerrado", "fuera de servicio", "reparación", "mantenimiento",
+                       "incidente", "avería", "falla"])):
+                
+                linea_nombre = f"Línea {lineas_subte[estado_index]}"
+                # Truncar el mensaje si es muy largo
+                mensaje_estado = line[:100] + "..." if len(line) > 100 else line
+                estados[linea_nombre] = f"Problema: {mensaje_estado}"
+                print(f"Extraído - {linea_nombre}: Problema: {mensaje_estado}")
+                estado_index += 1
+            
+            # Si encontramos una línea que parece irrelevante pero necesitamos avanzar
+            elif (estado_index < len(lineas_subte) and 
+                  line and 
+                  not line.isdigit() and 
+                  "." not in line and 
+                  len(line) > 5 and
+                  line not in ['Estado del servicio', 'Los trenes']):
+                
+                # Revisar si la siguiente línea es "Normal"
+                if i + 1 < len(lines) and lines[i + 1].strip() == 'Normal':
+                    # Esta línea descriptiva corresponde a una línea con problemas
+                    linea_nombre = f"Línea {lineas_subte[estado_index]}"
+                    mensaje_estado = line[:100] + "..." if len(line) > 100 else line
+                    estados[linea_nombre] = f"Alerta: {mensaje_estado}"
+                    print(f"Extraído - {linea_nombre}: Alerta: {mensaje_estado}")
+                    estado_index += 1
+                    i += 1  # Saltar la línea "Normal" siguiente
+            
+            i += 1
         
-        # Método 3: Extraer información de los bloques encontrados con selectores
-        else:
-            for bloque in bloques_encontrados:
-                try:
-                    texto_bloque = bloque.text.strip()
-                    print(f"Procesando bloque: {texto_bloque}")
-                    
-                    # Si el bloque contiene "Estado del servicio", extraer usando el método 4
-                    if "Estado del servicio" in texto_bloque:
-                        lines = texto_bloque.split('\n')
-                        lineas_subte = ['A', 'B', 'C', 'D', 'E', 'H']
-                        estado_index = 0
-                        
-                        for line in lines:
-                            line = line.strip()
-                            if line in ['Normal', 'Limitado', 'Demora', 'Interrumpido', 'Suspendido', 'Sin servicio']:
-                                if estado_index < len(lineas_subte):
-                                    linea_nombre = f"Línea {lineas_subte[estado_index]}"
-                                    estados[linea_nombre] = line
-                                    print(f"Extraído - {linea_nombre}: {line}")
-                                    estado_index += 1
-                        break
-                    
-                    # Buscar nombre de línea (método original)
-                    nombre_encontrado = None
-                    for linea in ['A', 'B', 'C', 'D', 'E', 'H']:
-                        if linea in texto_bloque:
-                            nombre_encontrado = f"Línea {linea}"
-                            break
-                    
-                    # Buscar estado
-                    estado_encontrado = None
-                    estados_posibles = ['Normal', 'Limitado', 'Demora', 'Interrumpido', 'Suspendido', 'Sin servicio']
-                    for estado_pos in estados_posibles:
-                        if estado_pos.lower() in texto_bloque.lower():
-                            estado_encontrado = estado_pos
-                            break
-                    
-                    if nombre_encontrado and estado_encontrado:
-                        estados[nombre_encontrado] = estado_encontrado
-                        print(f"Encontrado - {nombre_encontrado}: {estado_encontrado}")
-                    
-                except Exception as e:
-                    print(f"Error procesando bloque: {e}")
-                    continue
-        
-        # Si no se encontró nada, mostrar contenido de la página para análisis
-        if not estados:
-            page_text = driver.execute_script("return document.body.innerText;")
-            print("Contenido de la página (primeros 1000 caracteres):")
-            print(page_text[:1000])
-            print("\n--- FIN DEL CONTENIDO ---")
-            
-            # Método 4: Extraer estados basándose en el patrón del contenido
-            lines = page_text.split('\n')
-            lineas_subte = ['A', 'B', 'C', 'D', 'E', 'H']
-            estado_index = 0
-            
-            for i, line in enumerate(lines):
-                line = line.strip()
-                if line in ['Normal', 'Limitado', 'Demora', 'Interrumpido', 'Suspendido', 'Sin servicio']:
-                    if estado_index < len(lineas_subte):
-                        linea_nombre = f"Línea {lineas_subte[estado_index]}"
-                        estados[linea_nombre] = line
-                        print(f"Extraído - {linea_nombre}: {line}")
-                        estado_index += 1
+        # Si no hemos completado todas las líneas, asumir que las restantes son normales
+        while estado_index < len(lineas_subte):
+            linea_nombre = f"Línea {lineas_subte[estado_index]}"
+            estados[linea_nombre] = "Normal"
+            print(f"Asumido - {linea_nombre}: Normal (no se encontró información específica)")
+            estado_index += 1
         
         driver.quit()
         return estados
@@ -271,6 +196,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
