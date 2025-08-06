@@ -8,8 +8,8 @@ import time
 # ========================
 # CONFIGURACIÓN
 # ========================
-TELEGRAM_TOKEN = '8366284760:AAHO74Vc58mScw9iVZ7uyjoWwc9iioKMcB8'
-TELEGRAM_CHAT_ID = '6404690721'
+TELEGRAM_TOKEN = '###'
+TELEGRAM_CHAT_ID = '####'
 INTERVALO_EJECUCION = 5400  # 1.5 horas en segundos
 ESTADO_NORMAL = "Normal" 
 
@@ -271,5 +271,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
