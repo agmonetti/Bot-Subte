@@ -50,8 +50,8 @@ Edita las siguientes variables en [`subte_alerta.py`](Bot-Subte/subte_alerta.py)
 
 ## Créditos
 
-Desarrollado por Agustin Monetti.  
-Basado en información pública de EMOVA.
-GitHub: @agmonetti
-Email: agmonetti@uade.edu.ar
+- Desarrollado por Agustin Monetti.
+- Basado en información pública de EMOVA.
+- GitHub: [@agmonetti](https://github.com/agmonetti)
+- Email: agmonetti@uade.edu.ar
 ---
