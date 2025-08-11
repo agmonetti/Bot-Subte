@@ -13,7 +13,18 @@ TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 INTERVALO_EJECUCION = 5400  # 1.5 horas en segundos
 ESTADO_NORMAL = "Normal" 
+# Verificar variables de entorno críticas
+if not TELEGRAM_TOKEN:
+    print("❌ Error: TELEGRAM_TOKEN no está configurado")
+    exit(1)
+    
+if not TELEGRAM_CHAT_ID:
+    print("❌ Error: TELEGRAM_CHAT_ID no está configurado")
+    exit(1)
 
+print(f"✅ Variables de entorno configuradas correctamente")
+print(f"📱 Chat ID: {TELEGRAM_CHAT_ID}")
+print(f"🤖 Token configurado: {'Sí' if TELEGRAM_TOKEN else 'No'}")
 
 # ========================
 # FUNCIONES
@@ -32,20 +43,37 @@ def obtener_estado_subte():
         chrome_options.add_argument('--disable-gpu')
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-extensions')
+        chrome_options.add_argument('--disable-web-security')
+        chrome_options.add_argument('--disable-features=VizDisplayCompositor')
+        chrome_options.add_argument('--remote-debugging-port=9222')
         chrome_options.add_argument('--window-size=1200,800')
-        chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+        chrome_options.add_argument('--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
-        driver = webdriver.Chrome(options=chrome_options)
+        # Detectar si estamos en un contenedor Docker
+        is_docker = os.path.exists('/.dockerenv') or os.getenv('CHROME_BIN')
+        
+        if is_docker:
+            # Configuración para Docker/Zeabur
+            chrome_options.binary_location = '/usr/bin/chromium'
+            service = webdriver.ChromeService(executable_path='/usr/bin/chromedriver')
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+        else:
+            # Configuración para desarrollo local
+            driver = webdriver.Chrome(options=chrome_options)
+        
+        print(f"🌐 Navegando a: {url_estado}")
         driver.get(url_estado)
         
         # Esperar más tiempo para que cargue completamente
-        time.sleep(8)
+        time.sleep(10)
         
-        # Guardar HTML para depuración
-        html_content = driver.page_source
-        with open("subte_debug.html", "w", encoding="utf-8") as f:
-            f.write(html_content)
-        print("HTML guardado en subte_debug.html para análisis")
+        # No guardar HTML en producción para evitar problemas de permisos
+        if not is_docker:
+            html_content = driver.page_source
+            with open("subte_debug.html", "w", encoding="utf-8") as f:
+                f.write(html_content)
+            print("HTML guardado en subte_debug.html para análisis")
         
         # Obtener el texto completo de la página
         page_text = driver.execute_script("return document.body.innerText;")
@@ -53,6 +81,7 @@ def obtener_estado_subte():
         print(page_text[:1000])
         print("\n--- FIN DEL CONTENIDO ---")
         
+        # ...existing code...
         # Nuevo método: Analizar línea por línea con mejor lógica
         lines = [line.strip() for line in page_text.split('\n') if line.strip()]
         lineas_subte = ['A', 'B', 'C', 'D', 'E', 'H']
