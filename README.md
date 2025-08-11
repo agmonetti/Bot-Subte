@@ -55,3 +55,5 @@ Edita las siguientes variables en [`subte_alerta.py`](Bot-Subte/subte_alerta.py)
 - GitHub: [@agmonetti](https://github.com/agmonetti)
 - Email: agmonetti@uade.edu.ar
 ---
+
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
