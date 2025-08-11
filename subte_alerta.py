@@ -52,64 +52,46 @@ def obtener_estado_subte():
         print(page_text[:1000])
         print("\n--- FIN DEL CONTENIDO ---")
         
-        # Método robusto: Extraer estados basándose en el patrón del contenido
-        lines = page_text.split('\n')
+        # Nuevo método: Analizar línea por línea con mejor lógica
+        lines = [line.strip() for line in page_text.split('\n') if line.strip()]
         lineas_subte = ['A', 'B', 'C', 'D', 'E', 'H']
-        estado_index = 0
         
-        i = 0
-        while i < len(lines) and estado_index < len(lineas_subte):
-            line = lines[i].strip()
+        # Encontrar todas las líneas que contienen "Normal" o descripciones de problemas
+        estados_encontrados = []
+        
+        for i, line in enumerate(lines):
+            # Si encontramos "Normal", lo agregamos
+            if line == "Normal":
+                estados_encontrados.append("Normal")
+                print(f"Encontrado estado Normal en línea {i}: '{line}'")
             
-            # Si es un estado estándar
-            if line in ['Normal', 'Limitado', 'Demora', 'Interrumpido', 'Suspendido', 'Sin servicio']:
-                linea_nombre = f"Línea {lineas_subte[estado_index]}"
-                estados[linea_nombre] = line
-                print(f"Extraído - {linea_nombre}: {line}")
-                estado_index += 1
-            
-            # Si es una descripción de problema (líneas largas con texto descriptivo)
-            elif (len(line) > 10 and 
-                  estado_index < len(lineas_subte) and
+            # Si encontramos una descripción de problema (texto largo descriptivo)
+            elif (len(line) > 15 and 
                   any(keyword in line.lower() for keyword in 
-                      ["no se detienen", "operativo", "demora", "interrumpido", 
+                      ["cerrada", "cerrado", "plaza italia", "obras", "renovación", 
+                       "no se detienen", "operativo", "demora", "interrumpido", 
                        "suspendido", "limitado", "sin servicio", "problema", 
-                       "cerrado", "fuera de servicio", "reparación", "mantenimiento",
-                       "incidente", "avería", "falla"])):
+                       "fuera de servicio", "reparación", "mantenimiento",
+                       "incidente", "avería", "falla", "estación"])):
                 
-                linea_nombre = f"Línea {lineas_subte[estado_index]}"
-                # Truncar el mensaje si es muy largo
-                mensaje_estado = line[:100] + "..." if len(line) > 100 else line
-                estados[linea_nombre] = f"Problema: {mensaje_estado}"
-                print(f"Extraído - {linea_nombre}: Problema: {mensaje_estado}")
-                estado_index += 1
-            
-            # Si encontramos una línea que parece irrelevante pero necesitamos avanzar
-            elif (estado_index < len(lineas_subte) and 
-                  line and 
-                  not line.isdigit() and 
-                  "." not in line and 
-                  len(line) > 5 and
-                  line not in ['Estado del servicio', 'Los trenes']):
-                
-                # Revisar si la siguiente línea es "Normal"
-                if i + 1 < len(lines) and lines[i + 1].strip() == 'Normal':
-                    # Esta línea descriptiva corresponde a una línea con problemas
-                    linea_nombre = f"Línea {lineas_subte[estado_index]}"
-                    mensaje_estado = line[:100] + "..." if len(line) > 100 else line
-                    estados[linea_nombre] = f"Alerta: {mensaje_estado}"
-                    print(f"Extraído - {linea_nombre}: Alerta: {mensaje_estado}")
-                    estado_index += 1
-                    i += 1  # Saltar la línea "Normal" siguiente
-            
-            i += 1
+                estados_encontrados.append(line)
+                print(f"Encontrado problema en línea {i}: '{line}'")
         
-        # Si no hemos completado todas las líneas, asumir que las restantes son normales
-        while estado_index < len(lineas_subte):
-            linea_nombre = f"Línea {lineas_subte[estado_index]}"
-            estados[linea_nombre] = "Normal"
-            print(f"Asumido - {linea_nombre}: Normal (no se encontró información específica)")
-            estado_index += 1
+        print(f"Estados encontrados: {estados_encontrados}")
+        
+        # Asignar estados a las líneas
+        for i, linea in enumerate(lineas_subte):
+            if i < len(estados_encontrados):
+                estado = estados_encontrados[i]
+                # Si el estado es muy largo, truncarlo para el mensaje
+                if len(estado) > 100:
+                    estado = estado[:97] + "..."
+                estados[f"Línea {linea}"] = estado
+                print(f"Asignado - Línea {linea}: {estado}")
+            else:
+                # Si no hay suficientes estados, asumir normal
+                estados[f"Línea {linea}"] = "Normal"
+                print(f"Asumido - Línea {linea}: Normal")
         
         driver.quit()
         return estados
@@ -119,7 +101,6 @@ def obtener_estado_subte():
         if driver:
             driver.quit()
         return {}
-
 def enviar_alerta_telegram(cambios):
     mensaje = "🚇 *Alerta del Subte de Buenos Aires*\n\n"
     for linea, estado in cambios.items():
@@ -196,6 +177,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
