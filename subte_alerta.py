@@ -4,12 +4,13 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 import time
+import os
 
 # ========================
 # CONFIGURACIÓN
 # ========================
-TELEGRAM_TOKEN = '###'
-TELEGRAM_CHAT_ID = '####'
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 INTERVALO_EJECUCION = 5400  # 1.5 horas en segundos
 ESTADO_NORMAL = "Normal" 
 
@@ -101,6 +102,7 @@ def obtener_estado_subte():
         if driver:
             driver.quit()
         return {}
+    
 def enviar_alerta_telegram(cambios):
     mensaje = "🚇 *Alerta del Subte de Buenos Aires*\n\n"
     for linea, estado in cambios.items():
@@ -177,8 +179,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
