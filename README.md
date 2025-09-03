@@ -80,8 +80,10 @@ El bot detecta automáticamente:
 
 ## Variables de entorno
 
-| `TELEGRAM_TOKEN` | Token de tu bot de Telegram ||
-| `TELEGRAM_CHAT_ID` | ID del chat donde enviar alertas ||
+| Variable | Descripción |
+|----------|-------------|
+| `TELEGRAM_TOKEN` | Token de tu bot de Telegram |
+| `TELEGRAM_CHAT_ID` | ID del chat donde enviar alertas |
 
 
 
