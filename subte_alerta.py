@@ -32,10 +32,6 @@ if not TELEGRAM_CHAT_ID:
     print("❌ Error: TELEGRAM_CHAT_ID no está configurado")
     exit(1)
 
-print(f"✅ Variables de entorno configuradas correctamente")
-print(f"📱 Chat ID: {TELEGRAM_CHAT_ID}")
-print(f"🤖 Token configurado: {'Sí' if TELEGRAM_TOKEN else 'No'}")
-
 # ========================
 # FUNCIONES DE PERSISTENCIA
 # ========================
@@ -68,7 +64,8 @@ def guardar_estados(estados_actuales, historial):
 # ========================
 def obtener_estado_subte():
     """
-    Obtiene el estado de las líneas del subte de Buenos Aires usando Selenium.
+    Obtiene el estado de las líneas del subte de Buenos Aires usando Selenium
+    aprovechando la estructura DOM específica de la página.
     """
     url_estado = "https://aplicacioneswp.metrovias.com.ar/estadolineasEMOVA/desktopEmova.html"
     estados = {}
@@ -112,52 +109,40 @@ def obtener_estado_subte():
                 f.write(html_content)
             print("HTML guardado en subte_debug.html para análisis")
         
-        # Obtener el texto completo de la página
-        page_text = driver.execute_script("return document.body.innerText;")
-        print("Contenido de la página (primeros 1000 caracteres):")
-        print(page_text[:1000])
-        print("\n--- FIN DEL CONTENIDO ---")
+        # Verificar si la página muestra el mensaje de servicio no disponible
+        sin_servicio = driver.find_elements(By.ID, "divSinservicio")
+        if sin_servicio and not sin_servicio[0].get_attribute("hidden"):
+            estados["estado_servicio"] = "Información no disponible"
+            driver.quit()
+            return estados
         
-        # Nuevo método: Analizar línea por línea con mejor lógica
-        lines = [line.strip() for line in page_text.split('\n') if line.strip()]
-        lineas_subte = ['A', 'B', 'C', 'D', 'E', 'H']
+        # Obtener todas las columnas que contienen información de líneas
+        columnas = driver.find_elements(By.CSS_SELECTOR, "#estadoLineasContainer .row:last-child .col")
         
-        # Encontrar todas las líneas que contienen "Normal" o descripciones de problemas
-        estados_encontrados = []
+        # Nombres de las líneas en orden
+        lineas_subte = ['A', 'B', 'C', 'D', 'E', 'H', 'Premetro']
         
-        for i, line in enumerate(lines):
-            # Si encontramos "Normal", lo agregamos
-            if line == "Normal":
-                estados_encontrados.append("Normal")
-                print(f"Encontrado estado Normal en línea {i}: '{line}'")
-            
-            # Si encontramos una descripción de problema (texto largo descriptivo)
-            elif (len(line) > 15 and 
-                  any(keyword in line.lower() for keyword in 
-                      ["cerrada", "cerrado", "plaza italia", "obras", "renovación", 
-                       "no se detienen", "operativo", "demora", "interrumpido", 
-                       "suspendido", "limitado", "sin servicio", "problema", 
-                       "fuera de servicio", "reparación", "mantenimiento",
-                       "incidente", "avería", "falla", "estación"])):
+        # Extraer estados de cada columna
+        for i, columna in enumerate(columnas[:min(len(columnas), len(lineas_subte))]):
+            try:
+                # Buscar la etiqueta de imagen para obtener el nombre alternativo (alt)
+                img = columna.find_element(By.CSS_SELECTOR, "img")
+                alt_text = img.get_attribute("alt")
                 
-                estados_encontrados.append(line)
-                print(f"Encontrado problema en línea {i}: '{line}'")
-        
-        print(f"Estados encontrados: {estados_encontrados}")
-        
-        # Asignar estados a las líneas
-        for i, linea in enumerate(lineas_subte):
-            if i < len(estados_encontrados):
-                estado = estados_encontrados[i]
-                # Si el estado es muy largo, truncarlo para el mensaje
-                if len(estado) > 100:
-                    estado = estado[:97] + "..."
-                estados[f"Línea {linea}"] = estado
-                print(f"Asignado - Línea {linea}: {estado}")
-            else:
-                # Si no hay suficientes estados, asumir normal
-                estados[f"Línea {linea}"] = "Normal"
-                print(f"Asumido - Línea {linea}: Normal")
+                # Buscar el texto de estado dentro del párrafo
+                p_elemento = columna.find_element(By.CSS_SELECTOR, "p")
+                estado_texto = p_elemento.text.strip()
+                
+                # Asignar el estado a la línea correspondiente
+                nombre_linea = f"Línea {lineas_subte[i]}"
+                estados[nombre_linea] = estado_texto
+                print(f"Extraído - {nombre_linea}: {estado_texto}")
+                
+            except Exception as e:
+                print(f"Error al extraer información de la columna {i}: {e}")
+                # Si hay error en alguna columna, asignar estado normal por defecto
+                if i < len(lineas_subte):
+                    estados[f"Línea {lineas_subte[i]}"] = "Normal"
         
         driver.quit()
         return estados
@@ -254,12 +239,10 @@ def analizar_cambios_con_historial(estados_actuales):
                             obras_renotificar[linea] = estado_actual
                             tipo_deteccion = "texto" if historial[linea].get("detectada_por_texto", False) else "persistencia"
                             print(f"🔔 Renotificando obra programada (detectada por {tipo_deteccion}) en {linea}")
-                    else:
-                        # Primera notificación como obra programada
-                        obras_renotificar[linea] = estado_actual
+                    # Eliminar el 'else' que estaba aquí: ya no renotificamos cuando ultima_notificacion es None
                         
-                elif historial[linea]["contador"] < UMBRAL_OBRA_PROGRAMADA:
-                    # Aún no es obra programada por persistencia, seguir alertando
+                elif not historial[linea]["es_obra_programada"]:
+                    # Aún no es obra programada, seguir alertando
                     cambios_nuevos[linea] = estado_actual
                     print(f"🔄 Problema continúa en {linea} (detección {historial[linea]['contador']})")
                     
@@ -296,7 +279,7 @@ def analizar_cambios_con_historial(estados_actuales):
     
     # Actualizar timestamp de notificación para elementos notificados
     ahora = datetime.now().isoformat()
-    for linea in list(cambios_nuevos.keys()) + list(obras_renotificar.keys()):
+    for linea in list(cambios_nuevos.keys()) + list(obras_programadas.keys()) + list(obras_renotificar.keys()):
         if linea in historial:
             historial[linea]["ultima_notificacion"] = ahora
     
@@ -306,33 +289,42 @@ def analizar_cambios_con_historial(estados_actuales):
     return cambios_nuevos, obras_programadas, obras_renotificar
 
 def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar):
-    """Envía alertas diferenciadas según el tipo de cambio"""
+    """Envía todas las alertas en un único mensaje"""
     
+    # Verificar si hay algo que notificar
+    if not (cambios_nuevos or obras_programadas or obras_renotificar):
+        return
+    
+    # Iniciar con un encabezado general
+    mensaje = "🚇 *Estado del Subte de Buenos Aires*\n\n"
+    
+    # Sección de obras programadas nuevas
+    if obras_programadas:
+        mensaje += "*Obras Programadas Detectadas:*\n\n"
+        for linea, estado in obras_programadas.items():
+            mensaje += f"🔸 {linea}: *{estado}*\n"
+        mensaje += f"\nAl ser obras programadas, el próximo recordatorio será en {DIAS_RENOTIFICAR_OBRA} días.\n\n"
+    
+    # Sección de cambios nuevos (problemas o líneas normalizadas)
     if cambios_nuevos:
-        mensaje = "🚇 *Alerta del Subte de Buenos Aires*\n\n"
+        mensaje += "*Novedades:*\n\n"
         for linea, estado in cambios_nuevos.items():
             if "Volvió a funcionar" in estado:
                 mensaje += f"✅ {linea}: {estado}\n"
             else:
                 mensaje += f"🔸 {linea}: *{estado}*\n"
-        enviar_mensaje_telegram(mensaje)
+        mensaje += "\n"
     
-    if obras_programadas:
-        mensaje = "🏗️ *Obra Programada Detectada*\n\n"
-        mensaje += "Las siguientes líneas tienen obras programadas:\n\n"
-        for linea, estado in obras_programadas.items():
-            mensaje += f"🔸 {linea}: *{estado}*\n"
-        mensaje += f"\n📅 No se volverá a notificar hasta dentro de {DIAS_RENOTIFICAR_OBRA} días."
-        enviar_mensaje_telegram(mensaje)
-    
+
+    # Sección de recordatorios de obras en curso
     if obras_renotificar:
-        mensaje = "🔔 *Recordatorio - Obras Programadas*\n\n"
-        mensaje += "Las siguientes obras programadas siguen activas:\n\n"
+        mensaje += "🔔 *Recordatorio - Obras Programadas Activas:*\n\n"
         for linea, estado in obras_renotificar.items():
             mensaje += f"🔸 {linea}: *{estado}*\n"
-        mensaje += f"\n📅 Próximo recordatorio en {DIAS_RENOTIFICAR_OBRA} días."
-        enviar_mensaje_telegram(mensaje)
-
+        mensaje += f"\nPróximo recordatorio en {DIAS_RENOTIFICAR_OBRA} días.\n"
+    
+    # Enviar el mensaje unificado
+    enviar_mensaje_telegram(mensaje)
 
 def enviar_mensaje_telegram(mensaje):
     """Función auxiliar para enviar mensajes a Telegram"""
@@ -385,10 +377,6 @@ def main():
     """
     Función principal que ejecuta el programa en bucle con espera.
     """
-    print("🚀 Iniciando Bot de Alertas del Subte")
-    print(f"⏰ Configurado para ejecutarse cada {INTERVALO_EJECUCION//60} minutos")
-    print(f"🏗️ Umbral para obras programadas: {UMBRAL_OBRA_PROGRAMADA} detecciones")
-    print(f"🔔 Recordatorios de obras cada {DIAS_RENOTIFICAR_OBRA} días")
     
     while True:
         verificar_estados()
