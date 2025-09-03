@@ -83,7 +83,7 @@ El bot detecta automáticamente:
 | Variable | Descripción |
 |----------|-------------|
 | `TELEGRAM_TOKEN` | Token de tu bot de Telegram |
-| `TELEGRAM_CHAT_ID` | ID del chat donde enviar alertas |
+| `TELEGRAM_CHAT_ID` | ID del chat donde envia alertas |
 
 
 
