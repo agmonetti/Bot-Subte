@@ -25,11 +25,11 @@ DIAS_RENOTIFICAR_OBRA = 15   # Renotificar obras programadas cada 15 días
 
 # Verificar variables de entorno críticas
 if not TELEGRAM_TOKEN:
-    print("❌ Error: TELEGRAM_TOKEN no está configurado")
+    print("Error: TELEGRAM_TOKEN no está configurado")
     exit(1)
     
 if not TELEGRAM_CHAT_ID:
-    print("❌ Error: TELEGRAM_CHAT_ID no está configurado")
+    print("Error: TELEGRAM_CHAT_ID no está configurado")
     exit(1)
 
 # ========================
@@ -96,7 +96,7 @@ def obtener_estado_subte():
             # Configuración para desarrollo local
             driver = webdriver.Chrome(options=chrome_options)
         
-        print(f"🌐 Navegando a: {url_estado}")
+        print(f"Navegando a: {url_estado}")
         driver.get(url_estado)
         
         # Esperar más tiempo para que cargue completamente
@@ -205,11 +205,11 @@ def analizar_cambios_con_historial(estados_actuales):
                 if es_obra_por_texto:
                     # Es obra programada detectada por texto, notificar como tal
                     obras_programadas[linea] = estado_actual
-                    print(f"🏗️ Obra programada detectada por texto en {linea}: {estado_actual}")
+                    print(f"Obra programada detectada por texto en {linea}: {estado_actual}")
                 else:
                     # Problema nuevo, notificar normalmente
                     cambios_nuevos[linea] = estado_actual
-                    print(f"🆕 Nuevo problema detectado en {linea}: {estado_actual}")
+                    print(f"Nuevo problema detectado en {linea}: {estado_actual}")
                 
             elif historial[linea]["estado"] == estado_actual:
                 # Mismo problema que antes
@@ -220,7 +220,7 @@ def analizar_cambios_con_historial(estados_actuales):
                     historial[linea]["es_obra_programada"] = True
                     historial[linea]["detectada_por_texto"] = True
                     obras_programadas[linea] = estado_actual
-                    print(f"🏗️ {linea} reclasificada como obra programada por texto: {estado_actual}")
+                    print(f"{linea} reclasificada como obra programada por texto: {estado_actual}")
                 
                 elif (historial[linea]["contador"] >= UMBRAL_OBRA_PROGRAMADA and 
                       not historial[linea]["es_obra_programada"]):
@@ -228,7 +228,7 @@ def analizar_cambios_con_historial(estados_actuales):
                     historial[linea]["es_obra_programada"] = True
                     historial[linea]["detectada_por_texto"] = False
                     obras_programadas[linea] = estado_actual
-                    print(f"🏗️ {linea} clasificada como obra programada por persistencia tras {historial[linea]['contador']} detecciones")
+                    print(f"{linea} clasificada como obra programada por persistencia tras {historial[linea]['contador']} detecciones")
                     
                 elif historial[linea]["es_obra_programada"]:
                     # Es obra programada, verificar si hay que renotificar
@@ -238,13 +238,13 @@ def analizar_cambios_con_historial(estados_actuales):
                         if datetime.now() - ultima_fecha >= timedelta(days=DIAS_RENOTIFICAR_OBRA):
                             obras_renotificar[linea] = estado_actual
                             tipo_deteccion = "texto" if historial[linea].get("detectada_por_texto", False) else "persistencia"
-                            print(f"🔔 Renotificando obra programada (detectada por {tipo_deteccion}) en {linea}")
+                            print(f"Renotificando obra programada (detectada por {tipo_deteccion}) en {linea}")
                     # Eliminar el 'else' que estaba aquí: ya no renotificamos cuando ultima_notificacion es None
                         
                 elif not historial[linea]["es_obra_programada"]:
                     # Aún no es obra programada, seguir alertando
                     cambios_nuevos[linea] = estado_actual
-                    print(f"🔄 Problema continúa en {linea} (detección {historial[linea]['contador']})")
+                    print(f"Problema continúa en {linea} (detección {historial[linea]['contador']})")
                     
             else:
                 # Cambió el problema
@@ -260,20 +260,20 @@ def analizar_cambios_con_historial(estados_actuales):
                 
                 if es_obra_por_texto_nuevo:
                     obras_programadas[linea] = estado_actual
-                    print(f"🏗️ Problema cambió a obra programada (por texto) en {linea}: {estado_actual}")
+                    print(f"Problema cambió a obra programada (por texto) en {linea}: {estado_actual}")
                 else:
                     cambios_nuevos[linea] = estado_actual
-                    print(f"🔄 Problema cambió en {linea}: {estado_actual}")
+                    print(f"Problema cambió en {linea}: {estado_actual}")
                 
         else:
             # Línea volvió a normal
             if linea in historial:
                 if historial[linea]["es_obra_programada"]:
                     tipo_deteccion = "texto" if historial[linea].get("detectada_por_texto", False) else "persistencia"
-                    print(f"✅ Obra programada (detectada por {tipo_deteccion}) finalizada en {linea}")
+                    # print(f"✅ Obra programada (detectada por {tipo_deteccion}) finalizada en {linea}")
                     cambios_nuevos[linea] = "✅ Volvió a funcionar normalmente"
                 else:
-                    print(f"✅ Problema resuelto en {linea}")
+                    # print(f"✅ Problema resuelto en {linea}")
                     cambios_nuevos[linea] = "✅ Volvió a funcionar normalmente"
                 del historial[linea]
     
@@ -318,7 +318,7 @@ def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar)
 
     # Sección de recordatorios de obras en curso
     if obras_renotificar:
-        mensaje += "🔔 *Recordatorio - Obras Programadas Activas:*\n\n"
+        mensaje += "*Recordatorio - Obras Programadas Activas:*\n\n"
         for linea, estado in obras_renotificar.items():
             mensaje += f"🔸 {linea}: *{estado}*\n"
         mensaje += f"\nPróximo recordatorio en {DIAS_RENOTIFICAR_OBRA} días.\n"
@@ -332,11 +332,12 @@ def enviar_mensaje_telegram(mensaje):
     data = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": mensaje,
-        "parse_mode": "Markdown"
+        "parse_mode": "Markdown",
+        "disable_web_page_preview": True
     }
     response = requests.post(url, data=data)
     print("📤 Mensaje enviado por Telegram")
-    print(f"Mensaje: {mensaje}")
+    # print(f"Mensaje: {mensaje}")
     return response
 
 # ========================
@@ -347,17 +348,17 @@ def verificar_estados():
     Función que ejecuta la verificación de estados y envío de alertas.
     """
     try:
-        print(f"⏱️ Iniciando verificación - {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Iniciando verificación - {time.strftime('%Y-%m-%d %H:%M:%S')}")
         estados = obtener_estado_subte()
-        print(f"Estados obtenidos: {estados}")
+        # print(f"Estados obtenidos: {estados}")
         
         if not estados:
-            print("⚠️ No se pudo obtener información de estados. Verificar estructura HTML.")
+            print("No se pudo obtener información de estados. Verificar estructura HTML.")
             return
             
         # Verificar si tenemos el mensaje especial de "Información no disponible"
         if len(estados) == 1 and "estado_servicio" in estados and estados["estado_servicio"] == "Información no disponible":
-            print("ℹ️ El servicio de información de estados del subte no está disponible en este momento.")
+            print("El servicio de información de estados del subte no está disponible en este momento.")
             # Opcionalmente, podemos enviar una alerta sobre esto
             enviar_mensaje_telegram("⚠️ El sistema de información del subte no está disponible temporalmente.")
             return
@@ -368,10 +369,10 @@ def verificar_estados():
         if cambios_nuevos or obras_programadas or obras_renotificar:
             enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar)
         else:
-            print("✅ Todo funciona normalmente (sin cambios que notificar).")
+            print("Todo funciona normalmente (sin cambios que notificar).")
             
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"Error: {e}")
 
 def main():
     """
@@ -384,7 +385,7 @@ def main():
         # Mostrar cuándo será la próxima ejecución
         proxima_ejecucion = time.strftime('%Y-%m-%d %H:%M:%S', 
                                           time.localtime(time.time() + INTERVALO_EJECUCION))
-        print(f"💤 Esperando hasta la próxima ejecución ({proxima_ejecucion})...")
+        print(f"Esperando hasta la próxima ejecución ({proxima_ejecucion})...")
         
         # Esperar el intervalo configurado
         time.sleep(INTERVALO_EJECUCION)

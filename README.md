@@ -18,7 +18,7 @@ Este proyecto es un bot automatizado que monitorea el estado de las líneas del 
 - **Recuperación de servicio**: Notifica cuando las líneas vuelven a funcionar normalmente
 
 ### 📊 Sistema de historial
-- Guarda el estado de cada línea en [`estados_persistentes.json`](estados_persistentes.json)
+- Guarda el estado de cada línea en `estados_persistentes.json`
 - Cuenta las detecciones consecutivas para clasificar problemas persistentes
 - Evita spam de notificaciones para el mismo problema
 
