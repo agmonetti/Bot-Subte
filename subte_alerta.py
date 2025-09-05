@@ -176,7 +176,10 @@ def analizar_cambios_con_historial(estados_actuales):
         "renovación de estación",
         "renovacion de estacion",
         "modernización",
-        "modernizacion"
+        "modernizacion",
+        "cerrado por obras",
+        "cerrada por obras",
+        "estación cerrada por obras",
     ]
     
     def es_obra_programada_por_texto(estado):
