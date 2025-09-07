@@ -1,4 +1,4 @@
-# Bot de Alertas del Subte de Buenos Aires 🚇
+# Bot de Alertas del Subte de Buenos Aires
 
 Este proyecto es un bot automatizado que monitorea el estado de las líneas del subte de Buenos Aires y envía alertas inteligentes a Telegram cuando detecta cambios en el servicio.
 
@@ -12,27 +12,20 @@ Este proyecto es un bot automatizado que monitorea el estado de las líneas del 
 
 ## Características principales
 
-### 🔍 Detección inteligente
+### Detección 
 - **Obras programadas**: Detecta automáticamente obras de renovación integral y mantenimientos programados
 - **Incidentes**: Identifica problemas operativos que requieren atención inmediata
 - **Recuperación de servicio**: Notifica cuando las líneas vuelven a funcionar normalmente
 
-### 📊 Sistema de historial
+### Sistema de historial
 - Guarda el estado de cada línea en `estados_persistentes.json`
 - Cuenta las detecciones consecutivas para clasificar problemas persistentes
 - Evita spam de notificaciones para el mismo problema
 
-### 🔔 Alertas diferenciadas
+### Alertas diferenciadas
 - **Alertas urgentes**: Para nuevos incidentes o problemas operativos
 - **Notificaciones de obras**: Para obras programadas (una sola vez)
 - **Recordatorios**: Para obras de larga duración (cada 15 días)
-
-## Configuración automática
-
-El bot detecta automáticamente:
-- **Obras programadas por texto**: Busca palabras clave como "renovación integral", "obras programadas"
-- **Obras programadas por persistencia**: Problemas que persisten más de 5 detecciones consecutivas
-- **Ambiente de ejecución**: Configura automáticamente Chrome para Docker o desarrollo local
 
 ## Requisitos
 
