@@ -89,4 +89,5 @@ Este proyecto es un bot automatizado que monitorea el estado de las líneas del 
 
 ---
 
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+## License
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). 
