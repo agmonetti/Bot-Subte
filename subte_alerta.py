@@ -39,6 +39,8 @@ ESTADO_NORMAL = "Normal"
 ARCHIVO_ESTADO = "estados_persistentes.json"
 UMBRAL_OBRA_PROGRAMADA = 5  # Después de 5 detecciones consecutivas, se considera obra programada
 DIAS_RENOTIFICAR_OBRA = 15   # Renotificar obras programadas cada 15 días
+URL_ESTADO_SUBTE = "https://aplicacioneswp.metrovias.com.ar/estadolineasEMOVA/desktopEmova.html"
+
 
 # Verificar variables de entorno críticas
 if not TELEGRAM_TOKEN:
@@ -84,7 +86,7 @@ def obtener_estado_subte():
     Obtiene el estado de las líneas del subte de Buenos Aires usando Selenium
     aprovechando la estructura DOM específica de la página.
     """
-    url_estado = "https://aplicacioneswp.metrovias.com.ar/estadolineasEMOVA/desktopEmova.html"
+    #url_estado = "https://aplicacioneswp.metrovias.com.ar/estadolineasEMOVA/desktopEmova.html"
     estados = {}
     driver = None
     
@@ -113,8 +115,8 @@ def obtener_estado_subte():
             # Configuración para desarrollo local
             driver = webdriver.Chrome(options=chrome_options)
         
-        print(f"Navegando a: {url_estado}")
-        driver.get(url_estado)
+        print(f"Navegando a: {URL_ESTADO_SUBTE}")
+        driver.get(URL_ESTADO_SUBTE)
         
         # Esperar más tiempo para que cargue completamente
         time.sleep(10)
@@ -413,3 +415,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+
