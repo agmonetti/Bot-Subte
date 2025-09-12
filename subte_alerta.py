@@ -171,11 +171,13 @@ def obtener_estado_subte():
         if driver:
             driver.quit()
         return {}
-
+    
+    
 def analizar_cambios_con_historial(estados_actuales):
     """
     Analiza los cambios considerando el historial de estados.
-    Retorna: (cambios_nuevos, obras_programadas, obras_renotificar)
+    Procesa cada oración como entidad independiente.
+    Retorna: (cambios_nuevos, obras_programadas, obras_renotificar, componentes_adicionales)
     """
     data_anterior = cargar_estados_anteriores()
     historial = data_anterior.get("historial", {})
@@ -183,170 +185,274 @@ def analizar_cambios_con_historial(estados_actuales):
     cambios_nuevos = {}
     obras_programadas = {}
     obras_renotificar = {}
-    
-    # Palabras clave que indican obras programadas/renovación integral
-    palabras_obra_programada = [
-        "obras de renovación integral",
-        "renovación integral", 
-        "obras de renovacion integral",
-        "renovacion integral",
-        "obra programada",
-        "mantenimiento programado",
-        "renovación de estación",
-        "renovacion de estacion",
-        "modernización",
-        "modernizacion",
-        "cerrado por obras",
-        "cerrada por obras",
-        "estación cerrada por obras",
-    ]
-    
-    def es_obra_programada_por_texto(estado):
-        """Detecta si el estado indica una obra programada por sus palabras clave"""
-        estado_lower = estado.lower()
-        return any(palabra in estado_lower for palabra in palabras_obra_programada)
+    componentes_adicionales = {}
     
     for linea, estado_actual in estados_actuales.items():
         if estado_actual.lower() != ESTADO_NORMAL.lower():
-            # Hay un problema en esta línea
+            # Procesar el estado por componentes
+            componentes = procesar_estado_por_oraciones(estado_actual)
             
-            # Verificar si es obra programada por texto
-            es_obra_por_texto = es_obra_programada_por_texto(estado_actual)
+            # Procesar CADA OBRA independientemente
+            for i, obra in enumerate(componentes['obras']):
+                clave_obra = f"{linea}_obra_{i}" if i > 0 else f"{linea}_obra"
+                
+                if clave_obra not in historial:
+                    # Nueva obra detectada
+                    historial[clave_obra] = {
+                        "estado": obra,
+                        "linea_original": linea,
+                        "tipo": "obra",
+                        "contador": 1,
+                        "primera_deteccion": datetime.now().isoformat(),
+                        "ultima_notificacion": None,
+                        "es_obra_programada": True,
+                        "detectada_por_texto": True
+                    }
+                    if linea not in obras_programadas:
+                        obras_programadas[linea] = []
+                    obras_programadas[linea].append(obra)
+                    print(f"Obra programada detectada en {linea}: {obra}")
+                    
+                elif historial[clave_obra]["estado"] == obra:
+                    # Misma obra continúa
+                    historial[clave_obra]["contador"] += 1
+                    
+                    # Verificar renotificación
+                    if historial[clave_obra]["es_obra_programada"]:
+                        ultima_notif = historial[clave_obra]["ultima_notificacion"]
+                        if ultima_notif:
+                            ultima_fecha = datetime.fromisoformat(ultima_notif)
+                            if datetime.now() - ultima_fecha >= timedelta(days=DIAS_RENOTIFICAR_OBRA):
+                                if linea not in obras_renotificar:
+                                    obras_renotificar[linea] = []
+                                obras_renotificar[linea].append(obra)
+                                print(f"Renotificando obra en {linea}: {obra}")
+                else:
+                    # Obra cambió
+                    historial[clave_obra] = {
+                        "estado": obra,
+                        "linea_original": linea,
+                        "tipo": "obra",
+                        "contador": 1,
+                        "primera_deteccion": datetime.now().isoformat(),
+                        "ultima_notificacion": None,
+                        "es_obra_programada": True,
+                        "detectada_por_texto": True
+                    }
+                    if linea not in obras_programadas:
+                        obras_programadas[linea] = []
+                    obras_programadas[linea].append(obra)
+                    print(f"Obra cambió en {linea}: {obra}")
             
-            if linea not in historial:
-                # Primera vez que vemos este problema
-                historial[linea] = {
-                    "estado": estado_actual,
-                    "contador": 1,
-                    "primera_deteccion": datetime.now().isoformat(),
-                    "ultima_notificacion": None,
-                    "es_obra_programada": es_obra_por_texto,  # Marcar inmediatamente si es obra por texto
-                    "detectada_por_texto": es_obra_por_texto
-                }
+            # Procesar CADA PROBLEMA independientemente
+            for i, problema in enumerate(componentes['problemas']):
+                clave_problema = f"{linea}_problema_{i}" if i > 0 else f"{linea}_problema"
                 
-                if es_obra_por_texto:
-                    # Es obra programada detectada por texto, notificar como tal
-                    obras_programadas[linea] = estado_actual
-                    print(f"Obra programada detectada por texto en {linea}: {estado_actual}")
-                else:
-                    # Problema nuevo, notificar normalmente
-                    cambios_nuevos[linea] = estado_actual
-                    print(f"Nuevo problema detectado en {linea}: {estado_actual}")
-                
-            elif historial[linea]["estado"] == estado_actual:
-                # Mismo problema que antes
-                historial[linea]["contador"] += 1
-                
-                # Si no era obra programada antes, verificar si ahora lo es por texto
-                if not historial[linea]["es_obra_programada"] and es_obra_por_texto:
-                    historial[linea]["es_obra_programada"] = True
-                    historial[linea]["detectada_por_texto"] = True
-                    obras_programadas[linea] = estado_actual
-                    print(f"{linea} reclasificada como obra programada por texto: {estado_actual}")
-                
-                elif (historial[linea]["contador"] >= UMBRAL_OBRA_PROGRAMADA and 
-                      not historial[linea]["es_obra_programada"]):
-                    # Se convierte en obra programada por persistencia
-                    historial[linea]["es_obra_programada"] = True
-                    historial[linea]["detectada_por_texto"] = False
-                    obras_programadas[linea] = estado_actual
-                    print(f"{linea} clasificada como obra programada por persistencia tras {historial[linea]['contador']} detecciones")
+                if clave_problema not in historial:
+                    # Nuevo problema
+                    historial[clave_problema] = {
+                        "estado": problema,
+                        "linea_original": linea,
+                        "tipo": "problema",
+                        "contador": 1,
+                        "primera_deteccion": datetime.now().isoformat(),
+                        "ultima_notificacion": None,
+                        "es_obra_programada": False,
+                        "detectada_por_texto": False
+                    }
+                    if linea not in cambios_nuevos:
+                        cambios_nuevos[linea] = []
+                    cambios_nuevos[linea].append(problema)
+                    print(f"Nuevo problema detectado en {linea}: {problema}")
                     
-                elif historial[linea]["es_obra_programada"]:
-                    # Es obra programada, verificar si hay que renotificar
-                    ultima_notif = historial[linea]["ultima_notificacion"]
-                    if ultima_notif:
-                        ultima_fecha = datetime.fromisoformat(ultima_notif)
-                        if datetime.now() - ultima_fecha >= timedelta(days=DIAS_RENOTIFICAR_OBRA):
-                            obras_renotificar[linea] = estado_actual
-                            tipo_deteccion = "texto" if historial[linea].get("detectada_por_texto", False) else "persistencia"
-                            print(f"Renotificando obra programada (detectada por {tipo_deteccion}) en {linea}")
-                    # Eliminar el 'else' que estaba aquí: ya no renotificamos cuando ultima_notificacion es None
-                        
-                elif not historial[linea]["es_obra_programada"]:
-                    # Aún no es obra programada, seguir alertando
-                    cambios_nuevos[linea] = estado_actual
-                    print(f"Problema continúa en {linea} (detección {historial[linea]['contador']})")
+                elif historial[clave_problema]["estado"] == problema:
+                    # Mismo problema continúa
+                    historial[clave_problema]["contador"] += 1
                     
-            else:
-                # Cambió el problema
-                es_obra_por_texto_nuevo = es_obra_programada_por_texto(estado_actual)
-                historial[linea] = {
-                    "estado": estado_actual,
-                    "contador": 1,
-                    "primera_deteccion": datetime.now().isoformat(),
-                    "ultima_notificacion": None,
-                    "es_obra_programada": es_obra_por_texto_nuevo,
-                    "detectada_por_texto": es_obra_por_texto_nuevo
-                }
-                
-                if es_obra_por_texto_nuevo:
-                    obras_programadas[linea] = estado_actual
-                    print(f"Problema cambió a obra programada (por texto) en {linea}: {estado_actual}")
+                    if (historial[clave_problema]["contador"] >= UMBRAL_OBRA_PROGRAMADA and 
+                        not historial[clave_problema]["es_obra_programada"]):
+                        # Se convierte en obra por persistencia
+                        historial[clave_problema]["es_obra_programada"] = True
+                        if linea not in obras_programadas:
+                            obras_programadas[linea] = []
+                        obras_programadas[linea].append(problema)
+                        print(f"{linea} - problema clasificado como obra por persistencia: {problema}")
+                    elif not historial[clave_problema]["es_obra_programada"]:
+                        # Continúa como problema
+                        if linea not in cambios_nuevos:
+                            cambios_nuevos[linea] = []
+                        cambios_nuevos[linea].append(problema)
+                        print(f"Problema continúa en {linea}: {problema}")
                 else:
-                    cambios_nuevos[linea] = estado_actual
-                    print(f"Problema cambió en {linea}: {estado_actual}")
+                    # Problema cambió
+                    historial[clave_problema] = {
+                        "estado": problema,
+                        "linea_original": linea,
+                        "tipo": "problema",
+                        "contador": 1,
+                        "primera_deteccion": datetime.now().isoformat(),
+                        "ultima_notificacion": None,
+                        "es_obra_programada": False,
+                        "detectada_por_texto": False
+                    }
+                    if linea not in cambios_nuevos:
+                        cambios_nuevos[linea] = []
+                    cambios_nuevos[linea].append(problema)
+                    print(f"Problema cambió en {linea}: {problema}")
+            
+            # Procesar CADA HORARIO como información adicional
+            if componentes['horarios']:
+                if linea not in componentes_adicionales:
+                    componentes_adicionales[linea] = []
+                for horario in componentes['horarios']:
+                    componentes_adicionales[linea].append(f"{horario}")
+                    print(f"Información adicional para {linea}: {horario}")
+            
+            # NUEVO: Verificar componentes que desaparecieron
+            claves_linea_existentes = [k for k in historial.keys() if historial[k].get("linea_original") == linea]
+            
+            for clave in claves_linea_existentes:
+                tipo_componente = historial[clave]["tipo"]
+                estado_componente = historial[clave]["estado"]
+                
+                # Verificar si este componente ya no está presente
+                componente_aun_presente = False
+                
+                if tipo_componente == "obra":
+                    componente_aun_presente = estado_componente in componentes['obras']
+                elif tipo_componente == "problema":
+                    componente_aun_presente = estado_componente in componentes['problemas']
+                
+                if not componente_aun_presente:
+                    # Este componente desapareció
+                    if linea not in cambios_nuevos:
+                        cambios_nuevos[linea] = []
+                    
+                    if tipo_componente == "obra":
+                        cambios_nuevos[linea].append(f"Obra finalizada: {estado_componente}")
+                    elif tipo_componente == "problema":
+                        cambios_nuevos[linea].append(f"Problema resuelto: {estado_componente}")
+                    
+                    # Eliminar del historial
+                    del historial[clave]
+                    print(f"✅ {tipo_componente.title()} resuelto en {linea}: {estado_componente}")
                 
         else:
-            # Línea volvió a normal
-            if linea in historial:
-                if historial[linea]["es_obra_programada"]:
-                    tipo_deteccion = "texto" if historial[linea].get("detectada_por_texto", False) else "persistencia"
-                    # print(f"✅ Obra programada (detectada por {tipo_deteccion}) finalizada en {linea}")
-                    cambios_nuevos[linea] = "✅ Volvió a funcionar normalmente"
-                else:
-                    # print(f"✅ Problema resuelto en {linea}")
-                    cambios_nuevos[linea] = "✅ Volvió a funcionar normalmente"
-                del historial[linea]
+            # Línea volvió a normal - limpiar TODAS las entradas de esta línea
+            claves_a_eliminar = [k for k in historial.keys() if historial[k].get("linea_original") == linea]
+            
+            if claves_a_eliminar:
+                if linea not in cambios_nuevos:
+                    cambios_nuevos[linea] = []
+                cambios_nuevos[linea].append("Volvió a funcionar normalmente")
+                
+                for clave in claves_a_eliminar:
+                    del historial[clave]
+                print(f"{linea} volvió a normal - limpiado historial")
     
-    # Actualizar timestamp de notificación para elementos notificados
+    # Actualizar timestamps
     ahora = datetime.now().isoformat()
-    for linea in list(cambios_nuevos.keys()) + list(obras_programadas.keys()) + list(obras_renotificar.keys()):
-        if linea in historial:
-            historial[linea]["ultima_notificacion"] = ahora
+    for linea_dict in [cambios_nuevos, obras_programadas, obras_renotificar]:
+        for linea in linea_dict.keys():
+            claves_linea = [k for k in historial.keys() if historial[k].get("linea_original") == linea]
+            for clave in claves_linea:
+                historial[clave]["ultima_notificacion"] = ahora
     
-    # Guardar estados actualizados
+    # Guardar estados
     guardar_estados(estados_actuales, historial)
     
-    return cambios_nuevos, obras_programadas, obras_renotificar
+    return cambios_nuevos, obras_programadas, obras_renotificar, componentes_adicionales
+def procesar_estado_por_oraciones(estado_completo):
+    """
+    Separa un estado completo en múltiples componentes independientes
+    y los clasifica por tipo (obra, horario, problema, etc.)
+    """
+    # Separar por punto seguido de espacio o punto final
+    oraciones = re.split(r'\.\s+|\.$', estado_completo.strip())
+    oraciones = [o.strip() for o in oraciones if o.strip()]
+    
+    # Palabras clave para clasificación
+    palabras_obra = [
+        "obras de renovación integral", "renovación integral", 
+        "obras de renovacion integral", "renovacion integral",
+        "cerrada por obras", "cerrado por obras",
+        "obra programada", "mantenimiento programado"
+    ]
+    
+    palabras_horario = [
+        "horario extendido", "horario reducido", "horario especial",
+        "viernes y sabado", "fin de semana", "feriado"
+    ]
+    
+    componentes = {
+        'obras': [],
+        'horarios': [],
+        'problemas': [],
+        'otros': []
+    }
+    
+    for oracion in oraciones:
+        oracion_lower = oracion.lower()
+        
+        if any(palabra in oracion_lower for palabra in palabras_obra):
+            componentes['obras'].append(oracion)
+        elif any(palabra in oracion_lower for palabra in palabras_horario):
+            componentes['horarios'].append(oracion)
+        elif oracion_lower != "normal":
+            # Si no es obra ni horario, pero tampoco "normal", es un problema
+            componentes['problemas'].append(oracion)
+        else:
+            componentes['otros'].append(oracion)
+    
+    return componentes
 
-def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar):
+def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar, componentes_adicionales=None):
     """Envía todas las alertas en un único mensaje"""
     
-    # Verificar si hay algo que notificar
-    if not (cambios_nuevos or obras_programadas or obras_renotificar):
+    if not (cambios_nuevos or obras_programadas or obras_renotificar or componentes_adicionales):
         return
     
-    # Iniciar con un encabezado general
-    mensaje = "🚇 *Estado del Subte de Buenos Aires*\n\n"
+    mensaje = "🚇 Estado del Subte de Buenos Aires\n\n"
     
-    # Sección de obras programadas nuevas
+    # Obras programadas
     if obras_programadas:
-        mensaje += "*Obras Programadas Detectadas:*\n\n"
-        for linea, estado in obras_programadas.items():
-            mensaje += f"🔸 {linea}: *{estado}*\n"
+        mensaje += "Obras Programadas Detectadas:\n\n"
+        for linea, obras in obras_programadas.items():
+            for obra in obras:
+                mensaje += f"{linea}: {obra}\n"
         mensaje += f"\nAl ser obras programadas, el próximo recordatorio será en {DIAS_RENOTIFICAR_OBRA} días.\n\n"
     
-    # Sección de cambios nuevos (problemas o líneas normalizadas)
+    # Novedades
     if cambios_nuevos:
-        mensaje += "*Novedades:*\n\n"
-        for linea, estado in cambios_nuevos.items():
-            if "Volvió a funcionar" in estado:
-                mensaje += f"✅ {linea}: {estado}\n"
-            else:
-                mensaje += f"🔸 {linea}: *{estado}*\n"
+        mensaje += "Novedades:\n\n"
+        for linea, cambios in cambios_nuevos.items():
+            for cambio in cambios:
+                if "Volvió a funcionar" in cambio:
+                    mensaje += f"✅ {linea}: ✅ {cambio}\n"
+                elif "Problema resuelto:" in cambio or "Obra finalizada:" in cambio:
+                    mensaje += f"✅ {linea}: ✅ {cambio}\n"
+                else:
+                    mensaje += f"{linea}: {cambio}\n"
         mensaje += "\n"
     
-
-    # Sección de recordatorios de obras en curso
+    # Información adicional
+    if componentes_adicionales:
+        mensaje += "Información Adicional:\n\n"
+        for linea, componentes in componentes_adicionales.items():
+            for componente in componentes:
+                mensaje += f"{linea}: {componente}\n"
+        mensaje += "\n"
+    
+    # Recordatorios
     if obras_renotificar:
-        mensaje += "*Recordatorio - Obras Programadas Activas:*\n\n"
-        for linea, estado in obras_renotificar.items():
-            mensaje += f"🔸 {linea}: *{estado}*\n"
+        mensaje += "Recordatorio - Obras Programadas Activas:\n\n"
+        for linea, obras in obras_renotificar.items():
+            for obra in obras:
+                mensaje += f"{linea}: {obra}\n"
         mensaje += f"\nPróximo recordatorio en {DIAS_RENOTIFICAR_OBRA} días.\n"
     
-    # Enviar el mensaje unificado
     enviar_mensaje_telegram(mensaje)
+
 
 def enviar_mensaje_telegram(mensaje):
     """Función auxiliar para enviar mensajes a Telegram"""
@@ -365,6 +471,7 @@ def enviar_mensaje_telegram(mensaje):
 # ========================
 # EJECUCIÓN PRINCIPAL
 # ========================
+
 def verificar_estados():
     """
     Función que ejecuta la verificación de estados y envío de alertas.
@@ -372,7 +479,6 @@ def verificar_estados():
     try:
         print(f"Iniciando verificación - {time.strftime('%Y-%m-%d %H:%M:%S')}")
         estados = obtener_estado_subte()
-        # print(f"Estados obtenidos: {estados}")
         
         if not estados:
             print("No se pudo obtener información de estados. Verificar estructura HTML.")
@@ -381,21 +487,19 @@ def verificar_estados():
         # Verificar si tenemos el mensaje especial de "Información no disponible"
         if len(estados) == 1 and "estado_servicio" in estados and estados["estado_servicio"] == "Información no disponible":
             print("El servicio de información de estados del subte no está disponible en este momento.")
-            # Opcionalmente, podemos enviar una alerta sobre esto
             enviar_mensaje_telegram("⚠️ El sistema de información del subte no está disponible temporalmente.")
             return
             
-        # Usar el nuevo sistema de análisis con historial
-        cambios_nuevos, obras_programadas, obras_renotificar = analizar_cambios_con_historial(estados)
+        # CAMBIO: Agregar componentes_adicionales
+        cambios_nuevos, obras_programadas, obras_renotificar, componentes_adicionales = analizar_cambios_con_historial(estados)
         
-        if cambios_nuevos or obras_programadas or obras_renotificar:
-            enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar)
+        if cambios_nuevos or obras_programadas or obras_renotificar or componentes_adicionales:
+            enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar, componentes_adicionales)
         else:
             print("Todo funciona normalmente (sin cambios que notificar).")
             
     except Exception as e:
         print(f"Error: {e}")
-
 def main():
     """
     Función principal que ejecuta el programa en bucle con espera.

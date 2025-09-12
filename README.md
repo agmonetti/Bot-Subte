@@ -6,6 +6,7 @@ Este proyecto es un bot automatizado que monitorea el estado de las líneas del 
 
 - Utiliza Selenium para navegar y extraer el estado de cada línea desde la web oficial de EMOVA.
 - **Sistema inteligente de clasificación**: Distingue automáticamente entre incidentes urgentes y obras programadas.
+- **Procesamiento granular**: Analiza cada oración independientemente para detectar múltiples componentes por línea.
 - **Persistencia de estados**: Mantiene un historial de problemas para evitar notificaciones repetitivas.
 - **Alertas diferenciadas**: Envía diferentes tipos de mensajes según la naturaleza del problema.
 - El chequeo se realiza de manera periódica (por defecto, cada 1.5 horas).
@@ -16,6 +17,8 @@ Este proyecto es un bot automatizado que monitorea el estado de las líneas del 
 - **Obras programadas**: Detecta automáticamente obras de renovación integral y mantenimientos programados
 - **Incidentes**: Identifica problemas operativos que requieren atención inmediata
 - **Recuperación de servicio**: Notifica cuando las líneas vuelven a funcionar normalmente
+- **Múltiples componentes**: Puede detectar obras, problemas e información adicional en la misma línea
+
 
 ### Sistema de historial
 - Guarda el estado de cada línea en `estados_persistentes.json`
@@ -26,6 +29,8 @@ Este proyecto es un bot automatizado que monitorea el estado de las líneas del 
 - **Alertas urgentes**: Para nuevos incidentes o problemas operativos
 - **Notificaciones de obras**: Para obras programadas (una sola vez)
 - **Recordatorios**: Para obras de larga duración (cada 15 días)
+- **Información adicional**: Para horarios especiales y detalles complementarios
+
 
 ## Requisitos
 

@@ -21,6 +21,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Crear directorio para archivos persistentes
+RUN mkdir -p /app/data
+
 COPY . .
 
 CMD ["python", "subte_alerta.py"]
