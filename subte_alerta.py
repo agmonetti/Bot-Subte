@@ -19,6 +19,8 @@ import re
 import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 import time
 import os
@@ -29,25 +31,16 @@ from dotenv import load_dotenv
 # Cargar variables del archivo .env
 load_dotenv()
 
-# ========================
-# CONFIGURACIÓN
-# ========================
-TELEGRAM_TOKEN=os.getenv('TELEGRAM_TOKEN')
-TELEGRAM_CHAT_ID=os.getenv('TELEGRAM_CHAT_ID')
-INTERVALO_EJECUCION = 5400  # 1.5 horas en segundos
-ESTADO_NORMAL = "Normal"
-ARCHIVO_ESTADO = "estados_persistentes.json"
-UMBRAL_OBRA_PROGRAMADA = 5  # Después de 5 detecciones consecutivas, se considera obra programada
-DIAS_RENOTIFICAR_OBRA = 15   # Renotificar obras programadas cada 15 días
-URL_ESTADO_SUBTE = "https://aplicacioneswp.metrovias.com.ar/estadolineasEMOVA/desktopEmova.html"
-
-
+from config import (
+    telegram_token, telegram_chat_id, estado_normal, url_estado_subte,
+    intervalo_ejecucion, umbral_obra_programada, dias_renotificar_obra, archivo_estado
+)
 # Verificar variables de entorno críticas
-if not TELEGRAM_TOKEN:
+if not telegram_token:
     print("Error: TELEGRAM_TOKEN no está configurado")
     exit(1)
-    
-if not TELEGRAM_CHAT_ID:
+
+if not telegram_chat_id:
     print("Error: TELEGRAM_CHAT_ID no está configurado")
     exit(1)
 
@@ -58,8 +51,8 @@ if not TELEGRAM_CHAT_ID:
 # Recupera el historial de incidentes y estados previos para detectar cambios
 def cargar_estados_anteriores():
     try:
-        if os.path.exists(ARCHIVO_ESTADO):
-            with open(ARCHIVO_ESTADO, 'r', encoding='utf-8') as f:
+        if os.path.exists(archivo_estado):
+            with open(archivo_estado, 'r', encoding='utf-8') as f:
                 return json.load(f)
         return {}
     except Exception as e:
@@ -74,7 +67,7 @@ def guardar_estados(estados_actuales, historial):
             "estados_actuales": estados_actuales,
             "historial": historial
         }
-        with open(ARCHIVO_ESTADO, 'w', encoding='utf-8') as f:
+        with open(archivo_estado, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
     except Exception as e:
         print(f"Error al guardar estados: {e}")
@@ -85,40 +78,31 @@ def guardar_estados(estados_actuales, historial):
 
 # Extrae informacion de estado del DOM de la pagina oficial usando Selenium
 def obtener_estado_subte():
-    #url_estado = "https://aplicacioneswp.metrovias.com.ar/estadolineasEMOVA/desktopEmova.html"
     estados = {}
     driver = None
     
     try:
         chrome_options = Options()
         chrome_options.add_argument('--headless')
-        chrome_options.add_argument('--disable-gpu')
         chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-gpu')
         chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--disable-extensions')
-        chrome_options.add_argument('--disable-web-security')
-        chrome_options.add_argument('--disable-features=VizDisplayCompositor')
-        chrome_options.add_argument('--remote-debugging-port=9222')
-        chrome_options.add_argument('--window-size=1200,800')
         chrome_options.add_argument('--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-        
         # Detectar si estamos en un contenedor Docker
         is_docker = os.path.exists('/.dockerenv') or os.getenv('CHROME_BIN')
         
         if is_docker:
-            # Configuración para Docker/Zeabur
             chrome_options.binary_location = '/usr/bin/chromium'
             service = webdriver.ChromeService(executable_path='/usr/bin/chromedriver')
             driver = webdriver.Chrome(service=service, options=chrome_options)
         else:
-            # Configuración para desarrollo local
             driver = webdriver.Chrome(options=chrome_options)
-        
-        print(f"Navegando a: {URL_ESTADO_SUBTE}")
-        driver.get(URL_ESTADO_SUBTE)
-        
-        # Esperar más tiempo para que cargue completamente
-        time.sleep(10)
+
+        print(f"Navegando a: {url_estado_subte}")
+        driver.get(url_estado_subte)
+
+        wait = WebDriverWait(driver, 15)
+        wait.until(lambda driver: len(driver.find_elements(By.CSS_SELECTOR, "#estadoLineasContainer .row:last-child .col")) >= 7)
         
         # No guardar HTML en producción para evitar problemas de permisos
         if not is_docker:
@@ -170,9 +154,223 @@ def obtener_estado_subte():
         if driver:
             driver.quit()
         return {}
+
+
+
+# ========================
+# FUNCIONES DE ANALISIS DE CAMBIOS
+# ========================
+
+def procesar_obra_individual(linea, obra, indice, historial):
+    """Procesa una obra individual y determina su estado"""
+    clave_obra = f"{linea}_obra_{indice}" if indice > 0 else f"{linea}_obra"
     
-# Procesa estados actuales contra historial y clasifica incidentes por tipo y persistencia
+    if clave_obra not in historial:
+        # Nueva obra detectada
+        historial[clave_obra] = {
+            "estado": obra,
+            "linea_original": linea,
+            "tipo": "obra",
+            "contador": 1,
+            "primera_deteccion": datetime.now().isoformat(),
+            "ultima_notificacion": None,
+            "es_obra_programada": True,
+            "detectada_por_texto": True,
+            "activa": True,
+            "ya_notificada": True
+        }
+        return "nueva_obra", obra
+        
+    elif historial[clave_obra]["estado"] == obra:
+        # Misma obra continúa
+        historial[clave_obra]["contador"] += 1
+        
+        if not historial[clave_obra].get("activa", True):
+            historial[clave_obra]["activa"] = True
+            historial[clave_obra]["fecha_reactivacion"] = datetime.now().isoformat()
+            return "reactivada_silenciosa", obra
+            
+        elif (historial[clave_obra]["es_obra_programada"] and 
+              historial[clave_obra].get("ya_notificada", False)):
+            ultima_notif = historial[clave_obra]["ultima_notificacion"]
+            if ultima_notif:
+                ultima_fecha = datetime.fromisoformat(ultima_notif)
+                if datetime.now() - ultima_fecha >= timedelta(days=dias_renotificar_obra):
+                    return "renotificar", obra
+        return "continua", obra
+    else:
+        # Obra cambió
+        historial[clave_obra] = {
+            "estado": obra,
+            "linea_original": linea,
+            "tipo": "obra",
+            "contador": 1,
+            "primera_deteccion": datetime.now().isoformat(),
+            "ultima_notificacion": None,
+            "es_obra_programada": True,
+            "detectada_por_texto": True,
+            "activa": True,
+            "ya_notificada": True
+        }
+        return "obra_cambiada", obra
+
+def procesar_problema_individual(linea, problema, indice, historial):
+    """Procesa un problema individual y determina su estado"""
+    clave_problema = f"{linea}_problema_{indice}" if indice > 0 else f"{linea}_problema"
+    
+    if clave_problema not in historial:
+        # Nuevo problema
+        historial[clave_problema] = {
+            "estado": problema,
+            "linea_original": linea,
+            "tipo": "problema",
+            "contador": 1,
+            "primera_deteccion": datetime.now().isoformat(),
+            "ultima_notificacion": None,
+            "es_obra_programada": False,
+            "detectada_por_texto": False,
+            "activa": True,
+            "ya_notificada": True
+        }
+        return "nuevo_problema", problema
+        
+    elif historial[clave_problema]["estado"] == problema:
+        # Mismo problema continúa
+        historial[clave_problema]["contador"] += 1
+        
+        if not historial[clave_problema].get("activa", True):
+            historial[clave_problema]["activa"] = True
+            historial[clave_problema]["fecha_reactivacion"] = datetime.now().isoformat()
+            return "problema_reactivado", problema
+            
+        if (historial[clave_problema]["contador"] >= umbral_obra_programada and 
+            not historial[clave_problema]["es_obra_programada"]):
+            # Se convierte en obra por persistencia
+            historial[clave_problema]["es_obra_programada"] = True
+            mensaje_obra = f"{problema}.\nEste problema llegó a 5 apariciones, por lo que solo se volverá a notificar cuando cambie de estado o en 15 días \n"
+            return "convertido_a_obra", mensaje_obra
+        elif not historial[clave_problema]["es_obra_programada"]:
+            return "problema_continua", problema
+        
+        return "problema_persistente", problema
+    else:
+        # Problema cambió
+        historial[clave_problema] = {
+            "estado": problema,
+            "linea_original": linea,
+            "tipo": "problema",
+            "contador": 1,
+            "primera_deteccion": datetime.now().isoformat(),
+            "ultima_notificacion": None,
+            "es_obra_programada": False,
+            "detectada_por_texto": False,
+            "activa": True,
+            "ya_notificada": True
+        }
+        return "problema_cambiado", problema
+
+def detectar_componentes_desaparecidos(linea, componentes, historial):
+    """Detecta componentes que ya no están presentes"""
+    cambios_resueltos = []
+    claves_linea_existentes = [k for k in historial.keys() if historial[k].get("linea_original") == linea]
+    
+    for clave in claves_linea_existentes[:]:  # Copia para poder modificar durante iteración
+        tipo_componente = historial[clave]["tipo"]
+        estado_componente = historial[clave]["estado"]
+        es_obra_programada = historial[clave].get("es_obra_programada", False)
+        
+        # Verificar si este componente ya no está presente
+        componente_aun_presente = False
+        
+        if tipo_componente == "obra":
+            componente_aun_presente = estado_componente in componentes['obras']
+        elif tipo_componente == "problema":
+            componente_aun_presente = estado_componente in componentes['problemas']
+        
+        if not componente_aun_presente:
+            if tipo_componente == "problema" and not es_obra_programada:
+                cambios_resueltos.append(f"Problema resuelto: {estado_componente}")
+                del historial[clave]
+            elif tipo_componente == "obra" and not es_obra_programada:
+                cambios_resueltos.append(f"Obra finalizada: {estado_componente}")
+                del historial[clave]
+            else:
+                # Obra programada desapareció - marcar como inactiva
+                historial[clave]["activa"] = False
+                historial[clave]["fecha_desaparicion"] = datetime.now().isoformat()
+    
+    return cambios_resueltos
+
+def procesar_linea_con_problemas(linea, estado_actual, historial):
+    """Procesa una línea que tiene problemas o obras"""
+    componentes = procesar_estado_por_oraciones(estado_actual)
+    
+    resultados = {
+        'cambios_nuevos': [],
+        'obras_programadas': [],
+        'obras_renotificar': []
+    }
+    
+    # Procesar obras
+    for i, obra in enumerate(componentes['obras']):
+        tipo_resultado, contenido = procesar_obra_individual(linea, obra, i, historial)
+        
+        if tipo_resultado in ["nueva_obra", "obra_cambiada"]:
+            resultados['obras_programadas'].append(contenido)
+            print(f"Obra programada detectada en {linea}: {contenido}")
+        elif tipo_resultado == "renotificar":
+            resultados['obras_renotificar'].append(contenido)
+            print(f"Renotificando obra en {linea}: {contenido}")
+        elif tipo_resultado == "reactivada_silenciosa":
+            print(f"Obra programada reactivada silenciosamente en {linea}: {contenido}")
+    
+    # Procesar problemas
+    for i, problema in enumerate(componentes['problemas']):
+        tipo_resultado, contenido = procesar_problema_individual(linea, problema, i, historial)
+        
+        if tipo_resultado in ["nuevo_problema", "problema_cambiado"]:
+            resultados['cambios_nuevos'].append(contenido)
+            print(f"Nuevo problema detectado en {linea}: {contenido}")
+        elif tipo_resultado == "convertido_a_obra":
+            resultados['obras_programadas'].append(contenido)
+            print(f"{linea} - problema clasificado como obra por persistencia: {problema}")
+        elif tipo_resultado in ["problema_continua", "problema_reactivado"]:
+            resultados['cambios_nuevos'].append(contenido)
+            if tipo_resultado == "problema_reactivado":
+                print(f"Problema reactivado en {linea}: {contenido}")
+            else:
+                print(f"Problema continúa en {linea}: {contenido}")
+    
+    # Detectar componentes desaparecidos
+    cambios_resueltos = detectar_componentes_desaparecidos(linea, componentes, historial)
+    resultados['cambios_nuevos'].extend(cambios_resueltos)
+    
+    return resultados
+
+def procesar_linea_normal(linea, historial):
+    """Procesa una línea que volvió a normal"""
+    claves_a_eliminar = [k for k in historial.keys() if historial[k].get("linea_original") == linea]
+    
+    if claves_a_eliminar:
+        for clave in claves_a_eliminar:
+            del historial[clave]
+        print(f"{linea} volvió a normal - limpiado historial")
+        return ["Volvió a funcionar normalmente"]
+    
+    return []
+
+def actualizar_timestamps_notificacion(cambios_nuevos, obras_programadas, obras_renotificar, historial):
+    """Actualiza los timestamps de notificación"""
+    ahora = datetime.now().isoformat()
+    
+    for linea_dict in [cambios_nuevos, obras_programadas, obras_renotificar]:
+        for linea in linea_dict.keys():
+            claves_linea = [k for k in historial.keys() if historial[k].get("linea_original") == linea]
+            for clave in claves_linea:
+                historial[clave]["ultima_notificacion"] = ahora
+
 def analizar_cambios_con_historial(estados_actuales):
+    """Función principal refactorizada que coordina el análisis"""
     data_anterior = cargar_estados_anteriores()
     historial = data_anterior.get("historial", {})
     
@@ -182,206 +380,32 @@ def analizar_cambios_con_historial(estados_actuales):
     componentes_adicionales = {}
     
     for linea, estado_actual in estados_actuales.items():
-        if estado_actual.lower() != ESTADO_NORMAL.lower():
-            # Procesar el estado por componentes
-            componentes = procesar_estado_por_oraciones(estado_actual)
+        if estado_actual.lower() != estado_normal.lower():
+            # Línea con problemas
+            resultados = procesar_linea_con_problemas(linea, estado_actual, historial)
             
-            # Procesar CADA OBRA independientemente
-            for i, obra in enumerate(componentes['obras']):
-                clave_obra = f"{linea}_obra_{i}" if i > 0 else f"{linea}_obra"
-                
-                if clave_obra not in historial:
-                    # Nueva obra detectada
-                    historial[clave_obra] = {
-                        "estado": obra,
-                        "linea_original": linea,
-                        "tipo": "obra",
-                        "contador": 1,
-                        "primera_deteccion": datetime.now().isoformat(),
-                        "ultima_notificacion": None,
-                        "es_obra_programada": True,
-                        "detectada_por_texto": True,
-                        "activa": True,
-                        "ya_notificada": False
-                    }
-                    if linea not in obras_programadas:
-                        obras_programadas[linea] = []
-                    obras_programadas[linea].append(obra)
-                    historial[clave_obra]["ya_notificada"] = True
-                    print(f"Obra programada detectada en {linea}: {obra}")
-                    
-                elif historial[clave_obra]["estado"] == obra:
-                    # Misma obra continúa
-                    historial[clave_obra]["contador"] += 1
-                    
-                    # Si estaba inactiva, reactivarla sin notificar
-                    if not historial[clave_obra].get("activa", True):
-                        historial[clave_obra]["activa"] = True
-                        historial[clave_obra]["fecha_reactivacion"] = datetime.now().isoformat()
-                        print(f"Obra programada reactivada silenciosamente en {linea}: {obra}")
-                    
-                    # Verificar renotificación solo si está activa y ya fue notificada
-                    elif historial[clave_obra]["es_obra_programada"] and historial[clave_obra].get("ya_notificada", False):
-                        ultima_notif = historial[clave_obra]["ultima_notificacion"]
-                        if ultima_notif:
-                            ultima_fecha = datetime.fromisoformat(ultima_notif)
-                            if datetime.now() - ultima_fecha >= timedelta(days=DIAS_RENOTIFICAR_OBRA):
-                                if linea not in obras_renotificar:
-                                    obras_renotificar[linea] = []
-                                obras_renotificar[linea].append(obra)
-                                print(f"Renotificando obra en {linea}: {obra}")
-                else:
-                    # Obra cambió
-                    historial[clave_obra] = {
-                        "estado": obra,
-                        "linea_original": linea,
-                        "tipo": "obra",
-                        "contador": 1,
-                        "primera_deteccion": datetime.now().isoformat(),
-                        "ultima_notificacion": None,
-                        "es_obra_programada": True,
-                        "detectada_por_texto": True,
-                        "activa": True,
-                        "ya_notificada": False
-                    }
-                    if linea not in obras_programadas:
-                        obras_programadas[linea] = []
-                    obras_programadas[linea].append(obra)
-                    historial[clave_obra]["ya_notificada"] = True
-                    print(f"Obra cambió en {linea}: {obra}")
-            
-            # Procesar CADA PROBLEMA independientemente
-            for i, problema in enumerate(componentes['problemas']):
-                clave_problema = f"{linea}_problema_{i}" if i > 0 else f"{linea}_problema"
-                
-                if clave_problema not in historial:
-                    # Nuevo problema
-                    historial[clave_problema] = {
-                        "estado": problema,
-                        "linea_original": linea,
-                        "tipo": "problema",
-                        "contador": 1,
-                        "primera_deteccion": datetime.now().isoformat(),
-                        "ultima_notificacion": None,
-                        "es_obra_programada": False,
-                        "detectada_por_texto": False,
-                        "activa": True,
-                        "ya_notificada": False
-                    }
-                    if linea not in cambios_nuevos:
-                        cambios_nuevos[linea] = []
-                    cambios_nuevos[linea].append(problema)
-                    historial[clave_problema]["ya_notificada"] = True
-                    print(f"Nuevo problema detectado en {linea}: {problema}")
-                    
-                elif historial[clave_problema]["estado"] == problema:
-                    # Mismo problema continúa
-                    historial[clave_problema]["contador"] += 1
-                    
-                    # Si estaba inactivo, reactivarlo
-                    if not historial[clave_problema].get("activa", True):
-                        historial[clave_problema]["activa"] = True
-                        historial[clave_problema]["fecha_reactivacion"] = datetime.now().isoformat()
-                        print(f"Problema reactivado en {linea}: {problema}")
-                    
-                    if (historial[clave_problema]["contador"] >= UMBRAL_OBRA_PROGRAMADA and 
-                        not historial[clave_problema]["es_obra_programada"]):
-                        # Se convierte en obra por persistencia
-                        historial[clave_problema]["es_obra_programada"] = True
-                        if linea not in obras_programadas:
-                            obras_programadas[linea] = []
-                        obras_programadas[linea].append(f"{problema}.\nEste problema llegó a 5 apariciones, por lo que solo se volverá a notificar cuando cambie de estado o en 15 días")
-                        print(f"{linea} - problema clasificado como obra por persistencia: {problema}")
-                    elif not historial[clave_problema]["es_obra_programada"]:
-                        # Continúa como problema
-                        if linea not in cambios_nuevos:
-                            cambios_nuevos[linea] = []
-                        cambios_nuevos[linea].append(problema)
-                        print(f"Problema continúa en {linea}: {problema}")
-                else:
-                    # Problema cambió
-                    historial[clave_problema] = {
-                        "estado": problema,
-                        "linea_original": linea,
-                        "tipo": "problema",
-                        "contador": 1,
-                        "primera_deteccion": datetime.now().isoformat(),
-                        "ultima_notificacion": None,
-                        "es_obra_programada": False,
-                        "detectada_por_texto": False,
-                        "activa": True,
-                        "ya_notificada": False
-                    }
-                    if linea not in cambios_nuevos:
-                        cambios_nuevos[linea] = []
-                    cambios_nuevos[linea].append(problema)
-                    historial[clave_problema]["ya_notificada"] = True
-                    print(f"Problema cambió en {linea}: {problema}")
-            
-            
-            # Verificar componentes que desaparecieron
-            claves_linea_existentes = [k for k in historial.keys() if historial[k].get("linea_original") == linea]
-            
-            for clave in claves_linea_existentes:
-                tipo_componente = historial[clave]["tipo"]
-                estado_componente = historial[clave]["estado"]
-                es_obra_programada = historial[clave].get("es_obra_programada", False)
-                
-                # Verificar si este componente ya no está presente
-                componente_aun_presente = False
-                
-                if tipo_componente == "obra":
-                    componente_aun_presente = estado_componente in componentes['obras']
-                elif tipo_componente == "problema":
-                    componente_aun_presente = estado_componente in componentes['problemas']
-                
-                if not componente_aun_presente:
-                    # Este componente desapareció
-                    if tipo_componente == "problema" and not es_obra_programada:
-                        # Notificar problemas resueltos
-                        if linea not in cambios_nuevos:
-                            cambios_nuevos[linea] = []
-                        cambios_nuevos[linea].append(f"Problema resuelto: {estado_componente}")
-                        del historial[clave]
-                        print(f"Problema resuelto en {linea}: {estado_componente}")
-                    elif tipo_componente == "obra" and not es_obra_programada:
-                        # Notificar obras no programadas finalizadas
-                        if linea not in cambios_nuevos:
-                            cambios_nuevos[linea] = []
-                        cambios_nuevos[linea].append(f"Obra finalizada: {estado_componente}")
-                        del historial[clave]
-                        print(f"Obra finalizada en {linea}: {estado_componente}")
-                    else:
-                        # Obra programada desapareció - marcar como inactiva, no eliminar
-                        historial[clave]["activa"] = False
-                        historial[clave]["fecha_desaparicion"] = datetime.now().isoformat()
-                        print(f"Obra programada marcada como inactiva en {linea}: {estado_componente}")
-                
+            if resultados['cambios_nuevos']:
+                cambios_nuevos[linea] = resultados['cambios_nuevos']
+            if resultados['obras_programadas']:
+                obras_programadas[linea] = resultados['obras_programadas']
+            if resultados['obras_renotificar']:
+                obras_renotificar[linea] = resultados['obras_renotificar']
         else:
-            # Línea volvió a normal - limpiar TODAS las entradas de esta línea
-            claves_a_eliminar = [k for k in historial.keys() if historial[k].get("linea_original") == linea]
-            
-            if claves_a_eliminar:
-                if linea not in cambios_nuevos:
-                    cambios_nuevos[linea] = []
-                cambios_nuevos[linea].append("Volvió a funcionar normalmente")
-                
-                for clave in claves_a_eliminar:
-                    del historial[clave]
-                print(f"{linea} volvió a normal - limpiado historial")
+            # Línea volvió a normal
+            cambios_normales = procesar_linea_normal(linea, historial)
+            if cambios_normales:
+                cambios_nuevos[linea] = cambios_normales
     
     # Actualizar timestamps
-    ahora = datetime.now().isoformat()
-    for linea_dict in [cambios_nuevos, obras_programadas, obras_renotificar]:
-        for linea in linea_dict.keys():
-            claves_linea = [k for k in historial.keys() if historial[k].get("linea_original") == linea]
-            for clave in claves_linea:
-                historial[clave]["ultima_notificacion"] = ahora
+    actualizar_timestamps_notificacion(cambios_nuevos, obras_programadas, obras_renotificar, historial)
     
     # Guardar estados
     guardar_estados(estados_actuales, historial)
     
     return cambios_nuevos, obras_programadas, obras_renotificar, componentes_adicionales
+
+#
+
 
 # Separa texto de estado en componentes discretos y los clasifica por tipo de incidente
 def procesar_estado_por_oraciones(estado_completo):
@@ -401,6 +425,7 @@ def procesar_estado_por_oraciones(estado_completo):
     componentes = {
         'obras': [],
         'problemas': [],
+        'otros': []
     }
     
     for oracion in oraciones:
@@ -438,7 +463,7 @@ def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar,
     
         # Solo mostrar el mensaje de recordatorio si NO hay obras por persistencia
         if not tiene_obra_por_persistencia:
-            mensaje += f"\nAl ser obras programadas, el próximo recordatorio será en {DIAS_RENOTIFICAR_OBRA} días.\n\n"
+            mensaje += f"\nAl ser obras programadas, el próximo recordatorio será en {dias_renotificar_obra} días.\n\n"
         else:
             mensaje += "\n"
     # Novedades
@@ -460,15 +485,15 @@ def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar,
         for linea, obras in obras_renotificar.items():
             for obra in obras:
                 mensaje += f"{linea}: {obra}\n"
-        mensaje += f"\nPróximo recordatorio en {DIAS_RENOTIFICAR_OBRA} días.\n"
+        mensaje += f"\nPróximo recordatorio en {dias_renotificar_obra} días.\n"
     
     enviar_mensaje_telegram(mensaje)
 
 # Ejecuta el envio HTTP a la API de Telegram con el mensaje formateado
 def enviar_mensaje_telegram(mensaje):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
     data = {
-        "chat_id": TELEGRAM_CHAT_ID,
+        "chat_id": telegram_chat_id,
         "text": mensaje,
         "parse_mode": "Markdown",
         "disable_web_page_preview": True
@@ -490,11 +515,9 @@ def verificar_estados():
         # Verificar si tenemos el mensaje especial de "Información no disponible"
         if len(estados) == 1 and "estado_servicio" in estados and estados["estado_servicio"] == "Información no disponible":
             print("El servicio de información de estados del subte no está disponible en este momento.")
-            enviar_mensaje_telegram("⚠️ El sistema de información del subte no está disponible temporalmente.")
+            enviar_mensaje_telegram("El sistema de información del subte no está disponible temporalmente.")
             return
          
-        # CAMBIO: Agregar componentes_adicionales
-
         cambios_nuevos, obras_programadas, obras_renotificar, componentes_adicionales = analizar_cambios_con_historial(estados)
         if cambios_nuevos or obras_programadas or obras_renotificar or componentes_adicionales:
             enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar, componentes_adicionales)
@@ -519,11 +542,11 @@ def main():
         
         # Mostrar cuándo será la próxima ejecución
         proxima_ejecucion = time.strftime('%Y-%m-%d %H:%M:%S', 
-                                          time.localtime(time.time() + INTERVALO_EJECUCION))
+                                          time.localtime(time.time() + intervalo_ejecucion))
         print(f"Esperando hasta la próxima ejecución ({proxima_ejecucion})...")
         
         # Esperar el intervalo configurado
-        time.sleep(INTERVALO_EJECUCION)
+        time.sleep(intervalo_ejecucion)
 
 if __name__ == "__main__":
 
