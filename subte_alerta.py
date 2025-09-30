@@ -33,7 +33,7 @@ load_dotenv()
 
 from config import (
     telegram_token, telegram_chat_id, estado_normal, url_estado_subte,
-    intervalo_ejecucion, umbral_obra_programada, dias_renotificar_obra, archivo_estado
+    intervalo_ejecucion, umbral_obra_programada, dias_renotificar_obra, archivo_estado, dias_limpiar_historial
 )
 # Verificar variables de entorno críticas
 if not telegram_token:
@@ -369,10 +369,28 @@ def actualizar_timestamps_notificacion(cambios_nuevos, obras_programadas, obras_
             for clave in claves_linea:
                 historial[clave]["ultima_notificacion"] = ahora
 
+def limpiar_obras_inactivas_antiguas(historial):
+    """Elimina obras programadas que han estado inactivas por más de 5 días"""
+    claves_a_eliminar = []
+    ahora = datetime.now()
+    
+    for clave, datos in historial.items():
+        if (datos.get("es_obra_programada", False) and not datos.get("activa", True) and datos.get("fecha_desaparicion")):
+            fecha_desaparicion = datetime.fromisoformat(datos["fecha_desaparicion"])
+            if (ahora - fecha_desaparicion).days >= dias_limpiar_historial:
+                claves_a_eliminar.append(clave)
+    
+    for clave in claves_a_eliminar:
+        del historial[clave]
+    
+    return len(claves_a_eliminar) > 0
+
 def analizar_cambios_con_historial(estados_actuales):
     """Función principal refactorizada que coordina el análisis"""
     data_anterior = cargar_estados_anteriores()
     historial = data_anterior.get("historial", {})
+
+    limpiar_obras_inactivas_antiguas(historial)
     
     cambios_nuevos = {}
     obras_programadas = {}
