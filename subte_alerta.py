@@ -28,14 +28,14 @@ import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
-# Cargar variables del archivo .env
+
 load_dotenv()
 
 from config import (
     telegram_token, telegram_chat_id, estado_normal, url_estado_subte,
-    intervalo_ejecucion, umbral_obra_programada, dias_renotificar_obra, archivo_estado, dias_limpiar_historial
+    intervalo_ejecucion, umbral_obra_programada, dias_renotificar_obra, archivo_estado
 )
-# Verificar variables de entorno críticas
+
 if not telegram_token:
     print("Error: TELEGRAM_TOKEN no está configurado")
     exit(1)
@@ -48,8 +48,9 @@ if not telegram_chat_id:
 # FUNCIONES DE PERSISTENCIA
 # ========================
 
-# Recupera el historial de incidentes y estados previos para detectar cambios
+
 def cargar_estados_anteriores():
+    """Carga el estado anterior y el historial desde un archivo JSON"""
     try:
         if os.path.exists(archivo_estado):
             with open(archivo_estado, 'r', encoding='utf-8') as f:
@@ -59,8 +60,9 @@ def cargar_estados_anteriores():
         print(f"Error al cargar estados anteriores: {e}")
         return {}
 
-# Persiste el estado completo del sistema para continuidad entre ejecuciones
+
 def guardar_estados(estados_actuales, historial):
+    """Guarda el estado actual y el historial en un archivo JSON"""
     try:
         data = {
             "ultima_actualizacion": datetime.now().isoformat(),
@@ -76,8 +78,9 @@ def guardar_estados(estados_actuales, historial):
 # FUNCIONES PRINCIPALES
 # ========================
 
-# Extrae informacion de estado del DOM de la pagina oficial usando Selenium
+
 def obtener_estado_subte():
+    """Obtiene el estado actual del subte usando Selenium"""
     estados = {}
     driver = None
     
@@ -88,7 +91,7 @@ def obtener_estado_subte():
         chrome_options.add_argument('--disable-gpu')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-        # Detectar si estamos en un contenedor Docker
+        
         is_docker = os.path.exists('/.dockerenv') or os.getenv('CHROME_BIN')
         
         if is_docker:
@@ -104,45 +107,42 @@ def obtener_estado_subte():
         wait = WebDriverWait(driver, 15)
         wait.until(lambda driver: len(driver.find_elements(By.CSS_SELECTOR, "#estadoLineasContainer .row:last-child .col")) >= 7)
         
-        # No guardar HTML en producción para evitar problemas de permisos
+        # Solo guardar si no estamos en Docker para debugear en testing local
         if not is_docker:
             html_content = driver.page_source
             with open("subte_debug.html", "w", encoding="utf-8") as f:
                 f.write(html_content)
             print("HTML guardado en subte_debug.html para análisis")
         
-        # Verificar si la página muestra el mensaje de servicio no disponible
+        # La pagina puede mostrarse como fuera de servicio
         sin_servicio = driver.find_elements(By.ID, "divSinservicio")
         if sin_servicio and not sin_servicio[0].get_attribute("hidden"):
             estados["estado_servicio"] = "Información no disponible"
             driver.quit()
             return estados
         
-        # Obtener todas las columnas que contienen información de líneas
+        
         columnas = driver.find_elements(By.CSS_SELECTOR, "#estadoLineasContainer .row:last-child .col")
         
-        # Nombres de las líneas en orden
+        
         lineas_subte = ['A', 'B', 'C', 'D', 'E', 'H', 'Premetro']
         
-        # Extraer estados de cada columna
+        
         for i, columna in enumerate(columnas[:min(len(columnas), len(lineas_subte))]):
             try:
-                # Buscar la etiqueta de imagen para obtener el nombre alternativo (alt)
                 img = columna.find_element(By.CSS_SELECTOR, "img")
                 alt_text = img.get_attribute("alt")
                 
-                # Buscar el texto de estado dentro del párrafo
                 p_elemento = columna.find_element(By.CSS_SELECTOR, "p")
                 estado_texto = p_elemento.text.strip()
                 
-                # Asignar el estado a la línea correspondiente
                 nombre_linea = f"Línea {lineas_subte[i]}"
                 estados[nombre_linea] = estado_texto
                 print(f"Extraído - {nombre_linea}: {estado_texto}")
                 
             except Exception as e:
                 print(f"Error al extraer información de la columna {i}: {e}")
-                # Si hay error en alguna columna, asignar estado normal por defecto
+                # Si hay error en alguna columna, asignar estado normal por defecto - - - - NO MG
                 if i < len(lineas_subte):
                     estados[f"Línea {lineas_subte[i]}"] = "Normal"
         
@@ -157,9 +157,9 @@ def obtener_estado_subte():
 
 
 
-# ========================
+# =================================
 # FUNCIONES DE ANALISIS DE CAMBIOS
-# ========================
+# =================================
 
 def procesar_obra_individual(linea, obra, indice, historial):
     """Procesa una obra individual y determina su estado"""
@@ -199,7 +199,7 @@ def procesar_obra_individual(linea, obra, indice, historial):
                     return "renotificar", obra
         return "continua", obra
     else:
-        # Obra cambió
+        # significa que la obra cambio
         historial[clave_obra] = {
             "estado": obra,
             "linea_original": linea,
@@ -219,7 +219,6 @@ def procesar_problema_individual(linea, problema, indice, historial):
     clave_problema = f"{linea}_problema_{indice}" if indice > 0 else f"{linea}_problema"
     
     if clave_problema not in historial:
-        # Nuevo problema
         historial[clave_problema] = {
             "estado": problema,
             "linea_original": linea,
@@ -235,7 +234,6 @@ def procesar_problema_individual(linea, problema, indice, historial):
         return "nuevo_problema", problema
         
     elif historial[clave_problema]["estado"] == problema:
-        # Mismo problema continúa
         historial[clave_problema]["contador"] += 1
         
         if not historial[clave_problema].get("activa", True):
@@ -245,7 +243,7 @@ def procesar_problema_individual(linea, problema, indice, historial):
             
         if (historial[clave_problema]["contador"] >= umbral_obra_programada and 
             not historial[clave_problema]["es_obra_programada"]):
-            # Se convierte en obra por persistencia
+            # Se define como una obra por persistencia ya que no quiero recibir constantes notificaciones
             historial[clave_problema]["es_obra_programada"] = True
             mensaje_obra = f"{problema}.\nEste problema llegó a 5 apariciones, por lo que solo se volverá a notificar cuando cambie de estado o en 15 días \n"
             return "convertido_a_obra", mensaje_obra
@@ -254,7 +252,6 @@ def procesar_problema_individual(linea, problema, indice, historial):
         
         return "problema_persistente", problema
     else:
-        # Problema cambió
         historial[clave_problema] = {
             "estado": problema,
             "linea_original": linea,
@@ -270,16 +267,16 @@ def procesar_problema_individual(linea, problema, indice, historial):
         return "problema_cambiado", problema
 
 def detectar_componentes_desaparecidos(linea, componentes, historial):
-    """Detecta componentes que ya no están presentes"""
+    """Detecta componentes que ya no están presentes
+    Utilizo una copia para poder modificar durante iteración"""
     cambios_resueltos = []
     claves_linea_existentes = [k for k in historial.keys() if historial[k].get("linea_original") == linea]
     
-    for clave in claves_linea_existentes[:]:  # Copia para poder modificar durante iteración
+    for clave in claves_linea_existentes[:]: 
         tipo_componente = historial[clave]["tipo"]
         estado_componente = historial[clave]["estado"]
         es_obra_programada = historial[clave].get("es_obra_programada", False)
         
-        # Verificar si este componente ya no está presente
         componente_aun_presente = False
         
         if tipo_componente == "obra":
@@ -295,7 +292,6 @@ def detectar_componentes_desaparecidos(linea, componentes, historial):
                 cambios_resueltos.append(f"Obra finalizada: {estado_componente}")
                 del historial[clave]
             else:
-                # Obra programada desapareció - marcar como inactiva
                 historial[clave]["activa"] = False
                 historial[clave]["fecha_desaparicion"] = datetime.now().isoformat()
     
@@ -311,7 +307,6 @@ def procesar_linea_con_problemas(linea, estado_actual, historial):
         'obras_renotificar': []
     }
     
-    # Procesar obras
     for i, obra in enumerate(componentes['obras']):
         tipo_resultado, contenido = procesar_obra_individual(linea, obra, i, historial)
         
@@ -324,7 +319,7 @@ def procesar_linea_con_problemas(linea, estado_actual, historial):
         elif tipo_resultado == "reactivada_silenciosa":
             print(f"Obra programada reactivada silenciosamente en {linea}: {contenido}")
     
-    # Procesar problemas
+
     for i, problema in enumerate(componentes['problemas']):
         tipo_resultado, contenido = procesar_problema_individual(linea, problema, i, historial)
         
@@ -341,7 +336,7 @@ def procesar_linea_con_problemas(linea, estado_actual, historial):
             else:
                 print(f"Problema continúa en {linea}: {contenido}")
     
-    # Detectar componentes desaparecidos
+    # Buscamos algun cambio resuelto
     cambios_resueltos = detectar_componentes_desaparecidos(linea, componentes, historial)
     resultados['cambios_nuevos'].extend(cambios_resueltos)
     
@@ -369,28 +364,10 @@ def actualizar_timestamps_notificacion(cambios_nuevos, obras_programadas, obras_
             for clave in claves_linea:
                 historial[clave]["ultima_notificacion"] = ahora
 
-def limpiar_obras_inactivas_antiguas(historial):
-    """Elimina obras programadas que han estado inactivas por más de 5 días"""
-    claves_a_eliminar = []
-    ahora = datetime.now()
-    
-    for clave, datos in historial.items():
-        if (datos.get("es_obra_programada", False) and not datos.get("activa", True) and datos.get("fecha_desaparicion")):
-            fecha_desaparicion = datetime.fromisoformat(datos["fecha_desaparicion"])
-            if (ahora - fecha_desaparicion).days >= dias_limpiar_historial:
-                claves_a_eliminar.append(clave)
-    
-    for clave in claves_a_eliminar:
-        del historial[clave]
-    
-    return len(claves_a_eliminar) > 0
-
 def analizar_cambios_con_historial(estados_actuales):
-    """Función principal refactorizada que coordina el análisis"""
+    """Función principal que coordina el análisis del sitio web y la detección de cambios"""
     data_anterior = cargar_estados_anteriores()
     historial = data_anterior.get("historial", {})
-
-    limpiar_obras_inactivas_antiguas(historial)
     
     cambios_nuevos = {}
     obras_programadas = {}
@@ -399,7 +376,6 @@ def analizar_cambios_con_historial(estados_actuales):
     
     for linea, estado_actual in estados_actuales.items():
         if estado_actual.lower() != estado_normal.lower():
-            # Línea con problemas
             resultados = procesar_linea_con_problemas(linea, estado_actual, historial)
             
             if resultados['cambios_nuevos']:
@@ -409,29 +385,22 @@ def analizar_cambios_con_historial(estados_actuales):
             if resultados['obras_renotificar']:
                 obras_renotificar[linea] = resultados['obras_renotificar']
         else:
-            # Línea volvió a normal
             cambios_normales = procesar_linea_normal(linea, historial)
             if cambios_normales:
                 cambios_nuevos[linea] = cambios_normales
     
-    # Actualizar timestamps
+
     actualizar_timestamps_notificacion(cambios_nuevos, obras_programadas, obras_renotificar, historial)
-    
-    # Guardar estados
     guardar_estados(estados_actuales, historial)
     
     return cambios_nuevos, obras_programadas, obras_renotificar, componentes_adicionales
 
-#
 
-
-# Separa texto de estado en componentes discretos y los clasifica por tipo de incidente
 def procesar_estado_por_oraciones(estado_completo):
-    # Separar por punto seguido de espacio o punto final
+    """Procesa el estado completo dividiéndolo en oraciones y clasificándolas"""
     oraciones = re.split(r'\.\s+|\.$', estado_completo.strip())
     oraciones = [o.strip() for o in oraciones if o.strip()]
     
-    # Palabras clave para clasificación
     palabras_obra = [
         "obras de renovación integral", "renovación integral", 
         "obras de renovacion integral", "renovacion integral",
@@ -452,22 +421,19 @@ def procesar_estado_por_oraciones(estado_completo):
         if any(palabra in oracion_lower for palabra in palabras_obra):
             componentes['obras'].append(oracion)
         elif oracion_lower != "normal":
-            # TODO va a problemas: horarios, operativos, demoras, etc.
             componentes['problemas'].append(oracion)
         else:
             componentes['otros'].append(oracion)
     
     return componentes
 
-# Consolida todos los tipos de alertas en un mensaje unificado y maneja timestamps de notificacion
+
 def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar, componentes_adicionales=None):
-    
+    """Envía una alerta por Telegram con los cambios detectados"""    
     if not (cambios_nuevos or obras_programadas or obras_renotificar or componentes_adicionales):
         return
     
     mensaje = "🚇 Estado del Subte de Buenos Aires\n\n"
-    
-    # Obras programadas
     if obras_programadas:   
         mensaje += "Obras Programadas Detectadas:\n\n"
         tiene_obra_por_persistencia = False
@@ -475,16 +441,15 @@ def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar,
         for linea, obras in obras_programadas.items():
             for obra in obras:
                 mensaje += f"{linea}: {obra}\n"
-                # Verificar si alguna obra es por persistencia
+                # Verificar si alguna obra fue clasificada por persistencia
                 if "llegó a 5 apariciones" in obra:
                     tiene_obra_por_persistencia = True
     
-        # Solo mostrar el mensaje de recordatorio si NO hay obras por persistencia
         if not tiene_obra_por_persistencia:
             mensaje += f"\nAl ser obras programadas, el próximo recordatorio será en {dias_renotificar_obra} días.\n\n"
         else:
             mensaje += "\n"
-    # Novedades
+
     if cambios_nuevos:
         mensaje += "Novedades:\n\n"
         for linea, cambios in cambios_nuevos.items():
@@ -497,7 +462,7 @@ def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar,
                     mensaje += f"{linea}: {cambio}\n"
         mensaje += "\n"
     
-    # Recordatorios
+   
     if obras_renotificar:
         mensaje += "Recordatorio - Obras Programadas Activas:\n\n"
         for linea, obras in obras_renotificar.items():
@@ -507,8 +472,9 @@ def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar,
     
     enviar_mensaje_telegram(mensaje)
 
-# Ejecuta el envio HTTP a la API de Telegram con el mensaje formateado
+
 def enviar_mensaje_telegram(mensaje):
+    """Envía un mensaje usando la API de Telegram"""
     url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
     data = {
         "chat_id": telegram_chat_id,
@@ -521,8 +487,9 @@ def enviar_mensaje_telegram(mensaje):
     # print(f"Mensaje: {mensaje}")
     return response
 
-# Realiza la verificación completa del estado del subte y maneja alertas
+
 def verificar_estados():
+    """Función principal que verifica los estados y envía alertas si es necesario"""
     try:
         print(f"Iniciando verificación - {time.strftime('%Y-%m-%d %H:%M:%S')}")
         estados = obtener_estado_subte()  
@@ -530,7 +497,6 @@ def verificar_estados():
             print("No se pudo obtener información de estados. Verificar estructura HTML.")
             return
            
-        # Verificar si tenemos el mensaje especial de "Información no disponible"
         if len(estados) == 1 and "estado_servicio" in estados and estados["estado_servicio"] == "Información no disponible":
             print("El servicio de información de estados del subte no está disponible en este momento.")
             enviar_mensaje_telegram("El sistema de información del subte no está disponible temporalmente.")
@@ -552,21 +518,14 @@ def verificar_estados():
 # EJECUCIÓN PRINCIPAL
 # ========================
 
-# Ejecuta el programa en bucle infinito con intervalos de tiempo configurados
 def main():
-    
+    """Función principal que ejecuta el ciclo de verificación periódica"""   
     while True:
         verificar_estados()
         
-        # Mostrar cuándo será la próxima ejecución
-        proxima_ejecucion = time.strftime('%Y-%m-%d %H:%M:%S', 
-                                          time.localtime(time.time() + intervalo_ejecucion))
+        proxima_ejecucion = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time() + intervalo_ejecucion))
         print(f"Esperando hasta la próxima ejecución ({proxima_ejecucion})...")
-        
-        # Esperar el intervalo configurado
         time.sleep(intervalo_ejecucion)
 
 if __name__ == "__main__":
-
     main()
-
