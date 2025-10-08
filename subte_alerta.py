@@ -128,26 +128,44 @@ def obtener_estado_subte():
         lineas_subte = ['A', 'B', 'C', 'D', 'E', 'H', 'Premetro']
         
         
-        for i, columna in enumerate(columnas[:min(len(columnas), len(lineas_subte))]):
+        for i, columna in enumerate(columnas):
             try:
                 img = columna.find_element(By.CSS_SELECTOR, "img")
                 alt_text = img.get_attribute("alt")
                 
                 p_elemento = columna.find_element(By.CSS_SELECTOR, "p")
                 estado_texto = p_elemento.text.strip()
+
+                if alt_text and alt_text.strip():
+                    nombre_linea = alt_text.strip()
+                    print(f"Usando alt_text: {nombre_linea}")
+
+                else:
+                    if i < len(lineas_subte):
+                        nombre_linea = f"Línea {lineas_subte[i]}"
+                        print(f"Como la columna {i} no tenía alt_text: uso la opcion de backup: {nombre_linea}")
+                    else:
+                        print(f"Columna {i} no tenia disponible el alt_text y fuera del rango de lineas_subte")
+                        continue
                 
-                nombre_linea = f"Línea {lineas_subte[i]}"
                 estados[nombre_linea] = estado_texto
                 print(f"Extraído - {nombre_linea}: {estado_texto}")
                 
             except Exception as e:
                 print(f"Error al extraer información de la columna {i}: {e}")
                 # Si hay error en alguna columna, asignar estado normal por defecto - - - - NO MG
-                if i < len(lineas_subte):
-                    estados[f"Línea {lineas_subte[i]}"] = "Normal"
+                continue
+
+        if len(estados) == 0:
+            enviar_mensaje_telegram("No se pudo acceder al estado del subte. Reintentando mas tarde")
+            driver.quit()
+            return {}
+        else:
+            print(f"Se pudieron obtener {len(estados)} líneas del scrapping")
         
         driver.quit()
         return estados
+        
         
     except Exception as e:
         print(f"Error al obtener estados con Selenium: {e}")
@@ -378,7 +396,6 @@ def analizar_cambios_con_historial(estados_actuales):
     cambios_nuevos = {}
     obras_programadas = {}
     obras_renotificar = {}
-    componentes_adicionales = {}
 
     for linea, estado_actual in estados_para_procesar.items():
 
@@ -401,8 +418,7 @@ def analizar_cambios_con_historial(estados_actuales):
     actualizar_timestamps_notificacion(cambios_nuevos, obras_programadas, obras_renotificar, historial)
     guardar_estados(estados_para_procesar, historial)
     
-    return cambios_nuevos, obras_programadas, obras_renotificar, componentes_adicionales
-
+    return cambios_nuevos, obras_programadas, obras_renotificar
 
 def procesar_estado_por_oraciones(estado_completo):
     """Procesa el estado completo dividiéndolo en oraciones y clasificándolas"""
@@ -436,9 +452,9 @@ def procesar_estado_por_oraciones(estado_completo):
     return componentes
 
 
-def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar, componentes_adicionales=None):
+def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar):
     """Envía una alerta por Telegram con los cambios detectados"""    
-    if not (cambios_nuevos or obras_programadas or obras_renotificar or componentes_adicionales):
+    if not (cambios_nuevos or obras_programadas or obras_renotificar):
         return
     
     mensaje = "🚇 Estado del Subte de Buenos Aires\n\n"
@@ -510,9 +526,9 @@ def verificar_estados():
             enviar_mensaje_telegram("El sistema de información del subte no está disponible temporalmente.")
             return
          
-        cambios_nuevos, obras_programadas, obras_renotificar, componentes_adicionales = analizar_cambios_con_historial(estados)
-        if cambios_nuevos or obras_programadas or obras_renotificar or componentes_adicionales:
-            enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar, componentes_adicionales)
+        cambios_nuevos, obras_programadas, obras_renotificar = analizar_cambios_con_historial(estados)
+        if cambios_nuevos or obras_programadas or obras_renotificar:
+            enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar)
 
         else:
             print("Todo funciona normalmente (sin cambios que notificar).")
