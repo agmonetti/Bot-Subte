@@ -33,7 +33,7 @@ load_dotenv()
 
 from config import (
     telegram_token, telegram_chat_id, estado_normal, url_estado_subte,
-    intervalo_ejecucion, umbral_obra_programada, dias_renotificar_obra, archivo_estado
+    intervalo_ejecucion, umbral_obra_programada, dias_renotificar_obra, archivo_estado, estado_redundante
 )
 
 if not telegram_token:
@@ -368,13 +368,20 @@ def analizar_cambios_con_historial(estados_actuales):
     """Función principal que coordina el análisis del sitio web y la detección de cambios"""
     data_anterior = cargar_estados_anteriores()
     historial = data_anterior.get("historial", {})
+
+    estados_para_procesar = {}
+    for linea, estado in estados_actuales.items():
+        if estado.lower() != estado_redundante.lower():
+            estados_para_procesar[linea] = estado
+
     
     cambios_nuevos = {}
     obras_programadas = {}
     obras_renotificar = {}
     componentes_adicionales = {}
-    
-    for linea, estado_actual in estados_actuales.items():
+
+    for linea, estado_actual in estados_para_procesar.items():
+
         if estado_actual.lower() != estado_normal.lower():
             resultados = procesar_linea_con_problemas(linea, estado_actual, historial)
             
@@ -384,6 +391,7 @@ def analizar_cambios_con_historial(estados_actuales):
                 obras_programadas[linea] = resultados['obras_programadas']
             if resultados['obras_renotificar']:
                 obras_renotificar[linea] = resultados['obras_renotificar']
+
         else:
             cambios_normales = procesar_linea_normal(linea, historial)
             if cambios_normales:
@@ -391,7 +399,7 @@ def analizar_cambios_con_historial(estados_actuales):
     
 
     actualizar_timestamps_notificacion(cambios_nuevos, obras_programadas, obras_renotificar, historial)
-    guardar_estados(estados_actuales, historial)
+    guardar_estados(estados_para_procesar, historial)
     
     return cambios_nuevos, obras_programadas, obras_renotificar, componentes_adicionales
 

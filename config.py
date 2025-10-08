@@ -14,3 +14,4 @@ dias_limpiar_historial = int(os.getenv('dias_limpiar_historial', 5))
 url_estado_subte = "https://aplicacioneswp.metrovias.com.ar/estadolineasEMOVA/desktopEmova.html"
 archivo_estado = "estados_persistentes.json"
 estado_normal = "Normal"
+estado_redundante = "Servicio finalizado"
