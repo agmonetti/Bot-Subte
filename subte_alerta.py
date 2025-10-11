@@ -107,7 +107,7 @@ def obtener_estado_subte():
         wait = WebDriverWait(driver, 15)
         wait.until(lambda driver: len(driver.find_elements(By.CSS_SELECTOR, "#estadoLineasContainer .row:last-child .col")) >= 7)
         
-        # Solo guardar si no estamos en Docker para debugear en testing local
+        # si no estamos en Docker para debugear en testing local
         if not is_docker:
             html_content = driver.page_source
             with open("subte_debug.html", "w", encoding="utf-8") as f:
@@ -123,8 +123,6 @@ def obtener_estado_subte():
         
         
         columnas = driver.find_elements(By.CSS_SELECTOR, "#estadoLineasContainer .row:last-child .col")
-        
-        
         lineas_subte = ['A', 'B', 'C', 'D', 'E', 'H', 'Premetro']
         
         
@@ -132,20 +130,19 @@ def obtener_estado_subte():
             try:
                 img = columna.find_element(By.CSS_SELECTOR, "img")
                 alt_text = img.get_attribute("alt")
-                
                 p_elemento = columna.find_element(By.CSS_SELECTOR, "p")
                 estado_texto = p_elemento.text.strip()
 
                 if alt_text and alt_text.strip():
                     nombre_linea = alt_text.strip()
-                    print(f"Usando alt_text: {nombre_linea}")
+                    # print(f"Usando alt_text: {nombre_linea}")
 
                 else:
                     if i < len(lineas_subte):
                         nombre_linea = f"Línea {lineas_subte[i]}"
-                        print(f"Como la columna {i} no tenía alt_text: uso la opcion de backup: {nombre_linea}")
+                        # print(f"Como la columna {i} no tenía alt_text: uso la opcion de backup: {nombre_linea}")
                     else:
-                        print(f"Columna {i} no tenia disponible el alt_text y fuera del rango de lineas_subte")
+                        # print(f"Columna {i} no tenia disponible el alt_text y fuera del rango de lineas_subte")
                         continue
                 
                 estados[nombre_linea] = estado_texto
@@ -161,7 +158,8 @@ def obtener_estado_subte():
             driver.quit()
             return {}
         else:
-            print(f"Se pudieron obtener {len(estados)} líneas del scrapping")
+            # print(f"Se pudieron obtener {len(estados)} líneas del scrapping")
+            pass
         
         driver.quit()
         return estados
