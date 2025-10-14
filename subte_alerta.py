@@ -33,7 +33,7 @@ load_dotenv()
 
 from config import (
     telegram_token, telegram_chat_id, estado_normal, url_estado_subte,
-    intervalo_ejecucion, umbral_obra_programada, dias_renotificar_obra, archivo_estado, estado_redundante
+    intervalo_ejecucion, umbral_obra_programada, dias_renotificar_obra, archivo_estado, estado_redundante, dias_limpiar_historial
 )
 
 if not telegram_token:
@@ -60,7 +60,6 @@ def cargar_estados_anteriores():
         print(f"Error al cargar estados anteriores: {e}")
         return {}
 
-
 def guardar_estados(estados_actuales, historial):
     """Guarda el estado actual y el historial en un archivo JSON"""
     try:
@@ -75,9 +74,8 @@ def guardar_estados(estados_actuales, historial):
         print(f"Error al guardar estados: {e}")
 
 # ========================
-# FUNCIONES PRINCIPALES
+# FUNCION PRINCIPALES
 # ========================
-
 
 def obtener_estado_subte():
     """Obtiene el estado actual del subte usando Selenium"""
@@ -170,8 +168,6 @@ def obtener_estado_subte():
         if driver:
             driver.quit()
         return {}
-
-
 
 # =================================
 # FUNCIONES DE ANALISIS DE CAMBIOS
@@ -380,10 +376,41 @@ def actualizar_timestamps_notificacion(cambios_nuevos, obras_programadas, obras_
             for clave in claves_linea:
                 historial[clave]["ultima_notificacion"] = ahora
 
+def limpiar_historial_antiguo(historial):
+    """Elimina entradas inactivas después de X días, 
+    incluyendo obras clasificadas por persistencia"""
+    claves_a_eliminar = []
+    ahora = datetime.now()
+    
+    for clave, datos in historial.items():
+        if not datos.get("activa", True):
+            fecha_desaparicion = datos.get("fecha_desaparicion")
+            if fecha_desaparicion:
+                fecha_desap = datetime.fromisoformat(fecha_desaparicion)
+                dias_transcurridos = (ahora - fecha_desap).days
+                
+                es_obra_por_persistencia = (
+                    datos.get("es_obra_programada", False) and 
+                    not datos.get("detectada_por_texto", True)
+                )
+                
+                if dias_transcurridos >= dias_limpiar_historial:
+                    if es_obra_por_persistencia or not datos.get("es_obra_programada", False):
+                        tipo_entrada = "obra por persistencia" if es_obra_por_persistencia else datos.get("tipo", "desconocido")
+                        claves_a_eliminar.append(clave)
+                        print(f"🗑️  Limpiando {tipo_entrada}: {clave} ({dias_transcurridos} días inactiva)")
+    
+    for clave in claves_a_eliminar:
+        del historial[clave]
+    
+    return len(claves_a_eliminar) > 0
+
 def analizar_cambios_con_historial(estados_actuales):
     """Función principal que coordina el análisis del sitio web y la detección de cambios"""
     data_anterior = cargar_estados_anteriores()
     historial = data_anterior.get("historial", {})
+
+    limpiar_historial_antiguo(historial)
 
     estados_para_procesar = {}
     for linea, estado in estados_actuales.items():
