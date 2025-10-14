@@ -489,7 +489,7 @@ def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar)
     
         for linea, obras in obras_programadas.items():
             for obra in obras:
-                mensaje += f"{linea}: {obra}\n"
+                mensaje += f"<b><u>{linea}:</u></b> {obra}\n"
                 # Verificar si alguna obra fue clasificada por persistencia
                 if "llegó a 5 apariciones" in obra:
                     tiene_obra_por_persistencia = True
@@ -504,11 +504,11 @@ def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar)
         for linea, cambios in cambios_nuevos.items():
             for cambio in cambios:
                 if "Volvió a funcionar" in cambio:
-                    mensaje += f"✅ {linea}: ✅ {cambio}\n"
+                    mensaje += f"✅ <b>{linea}:</b>✅ {cambio}\n"
                 elif "Problema resuelto:" in cambio or "Obra finalizada:" in cambio:
-                    mensaje += f"✅ {linea}: ✅ {cambio}\n"
+                    mensaje += f"✅ <b>{linea}: </b>✅ {cambio}\n"
                 else:
-                    mensaje += f"{linea}: {cambio}\n"
+                    mensaje += f"<b>{linea}: </b>{cambio}\n"
         mensaje += "\n"
     
    
@@ -528,7 +528,8 @@ def enviar_mensaje_telegram(mensaje):
     data = {
         "chat_id": telegram_chat_id,
         "text": mensaje,
-        "parse_mode": "Markdown",
+        # "parse_mode": "Markdown",
+        "parse_mode": "HTML",
         "disable_web_page_preview": True
     }
     response = requests.post(url, data=data)
