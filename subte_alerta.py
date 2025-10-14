@@ -447,8 +447,24 @@ def analizar_cambios_con_historial(estados_actuales):
 
 def procesar_estado_por_oraciones(estado_completo):
     """Procesa el estado completo dividiéndolo en oraciones y clasificándolas"""
-    oraciones = re.split(r'\.\s+|\.$', estado_completo.strip())
-    oraciones = [o.strip() for o in oraciones if o.strip()]
+
+    texto = estado_completo.strip()
+    texto = texto.replace('Int.Saguier', 'INTSAGUIER_TEMP')
+    texto = texto.replace('Int. Saguier', 'INTSAGUIER_TEMP')
+    texto = texto.replace('Gral. Savio', 'GRALSAVIO_TEMP')
+    texto = texto.replace('Gral.Savio', 'GRALSAVIO_TEMP')
+    
+    oraciones = re.split(r'\.\s+|\.$', texto)
+    
+    oraciones_finales = []
+    for oracion in oraciones:
+        oracion = oracion.strip()
+        if not oracion:
+            continue
+        
+        oracion = oracion.replace('INTSAGUIER_TEMP', 'Int.Saguier')
+        oracion = oracion.replace('GRALSAVIO_TEMP', 'Gral. Savio')
+        oraciones_finales.append(oracion)
     
     palabras_obra = [
         "obras de renovación integral", "renovación integral", 
@@ -464,7 +480,7 @@ def procesar_estado_por_oraciones(estado_completo):
         'otros': []
     }
     
-    for oracion in oraciones:
+    for oracion in oraciones_finales:
         oracion_lower = oracion.lower()
         
         if any(palabra in oracion_lower for palabra in palabras_obra):
