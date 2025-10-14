@@ -200,7 +200,7 @@ def procesar_obra_individual(linea, obra, indice, historial):
         if not historial[clave_obra].get("activa", True):
             historial[clave_obra]["activa"] = True
             historial[clave_obra]["fecha_reactivacion"] = datetime.now().isoformat()
-            return "reactivada_silenciosa", obra
+            return "obra_reactivada", obra
             
         elif (historial[clave_obra]["es_obra_programada"] and 
               historial[clave_obra].get("ya_notificada", False)):
@@ -288,6 +288,7 @@ def detectar_componentes_desaparecidos(linea, componentes, historial):
         tipo_componente = historial[clave]["tipo"]
         estado_componente = historial[clave]["estado"]
         es_obra_programada = historial[clave].get("es_obra_programada", False)
+        detectada_por_texto = historial[clave].get("detectada_por_texto", False)
         
         componente_aun_presente = False
         
@@ -304,8 +305,13 @@ def detectar_componentes_desaparecidos(linea, componentes, historial):
                 cambios_resueltos.append(f"Obra finalizada: {estado_componente}")
                 del historial[clave]
             else:
+                # Es una obra programada (por texto o persistencia)
                 historial[clave]["activa"] = False
                 historial[clave]["fecha_desaparicion"] = datetime.now().isoformat()
+                
+                # Notificar finalización solo para obras detectadas por texto
+                if detectada_por_texto:
+                    cambios_resueltos.append(f"Obra finalizada: {estado_componente}")
     
     return cambios_resueltos
 
@@ -328,8 +334,9 @@ def procesar_linea_con_problemas(linea, estado_actual, historial):
         elif tipo_resultado == "renotificar":
             resultados['obras_renotificar'].append(contenido)
             print(f"Renotificando obra en {linea}: {contenido}")
-        elif tipo_resultado == "reactivada_silenciosa":
-            print(f"Obra programada reactivada silenciosamente en {linea}: {contenido}")
+        elif tipo_resultado == "obra_reactivada":
+            resultados['cambios_nuevos'].append(f"Obra reactivada: {contenido}")
+            print(f"Obra programada reactivada en {linea}: {contenido}")
     
 
     for i, problema in enumerate(componentes['problemas']):
@@ -507,6 +514,8 @@ def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar)
                     mensaje += f"✅ <b>{linea}:</b>✅ {cambio}\n"
                 elif "Problema resuelto:" in cambio or "Obra finalizada:" in cambio:
                     mensaje += f"✅ <b>{linea}: </b>✅ {cambio}\n"
+                elif "Obra reactivada:" in cambio:
+                    mensaje += f"🔄 <b>{linea}: </b>🔄 {cambio}\n"
                 else:
                     mensaje += f"<b>{linea}: </b>{cambio}\n"
         mensaje += "\n"
