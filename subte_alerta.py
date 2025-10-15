@@ -110,20 +110,13 @@ def obtener_estado_subte():
 
         wait = WebDriverWait(driver, 15)
         wait.until(lambda driver: len(driver.find_elements(By.CSS_SELECTOR, "#estadoLineasContainer .row:last-child .col")) >= 7)
-        
-        # si no estamos en Docker para debugear en testing local
-        if not is_docker:
-            html_content = driver.page_source
-            with open("subte_debug.html", "w", encoding="utf-8") as f:
-                f.write(html_content)
-            print("HTML guardado en subte_debug.html para análisis")
-        
-        # La pagina puede mostrarse como fuera de servicio
+
+        """ La pagina puede mostrarse como fuera de servicio """
         sin_servicio = driver.find_elements(By.ID, "divSinservicio")
         if sin_servicio and not sin_servicio[0].get_attribute("hidden"):
-            estados["estado_servicio"] = "Información no disponible"
+            enviar_mensaje_telegram("El sistema de información del subte no está disponible.")
             driver.quit()
-            return estados
+            return {}
         
         
         columnas = driver.find_elements(By.CSS_SELECTOR, "#estadoLineasContainer .row:last-child .col")
@@ -154,7 +147,6 @@ def obtener_estado_subte():
                 
             except Exception as e:
                 print(f"Error al extraer información de la columna {i}: {e}")
-                # Si hay error en alguna columna, asignar estado normal por defecto - - - - NO MG
                 continue
 
         if len(estados) == 0:
@@ -184,7 +176,7 @@ def procesar_obra_individual(linea, obra, indice, historial):
     clave_obra = f"{linea}_obra_{indice}" if indice > 0 else f"{linea}_obra"
     
     if clave_obra not in historial:
-        # Nueva obra detectada
+        """aparece una nueva obra"""
         historial[clave_obra] = {
             "estado": obra,
             "linea_original": linea,
@@ -200,7 +192,7 @@ def procesar_obra_individual(linea, obra, indice, historial):
         return "nueva_obra", obra
         
     elif historial[clave_obra]["estado"] == obra:
-        # Misma obra continúa
+        """la obra sigue estando"""
         historial[clave_obra]["contador"] += 1
         
         if not historial[clave_obra].get("activa", True):
@@ -217,7 +209,7 @@ def procesar_obra_individual(linea, obra, indice, historial):
                     return "renotificar", obra
         return "continua", obra
     else:
-        # significa que la obra cambio
+        """significa que la obra cambio"""
         historial[clave_obra] = {
             "estado": obra,
             "linea_original": linea,
@@ -261,7 +253,7 @@ def procesar_problema_individual(linea, problema, indice, historial):
             
         if (historial[clave_problema]["contador"] >= umbral_obra_programada and 
             not historial[clave_problema]["es_obra_programada"]):
-            # Se define como una obra por persistencia ya que no quiero recibir constantes notificaciones
+            """Se define como una obra por persistencia ya que no quiero recibir constantes notificaciones """
             historial[clave_problema]["es_obra_programada"] = True
             mensaje_obra = f"{problema}.\n \nEste problema llegó a 5 apariciones, por lo que solo se volverá a notificar cuando cambie de estado o en 15 días \n"
             return "convertido_a_obra", mensaje_obra
@@ -354,7 +346,7 @@ def procesar_linea_con_problemas(linea, estado_actual, historial):
             else:
                 print(f"Problema continúa en {linea}: {contenido}")
     
-    # Buscamos algun cambio resuelto
+    """hay cambios resueltos?"""
     cambios_resueltos = detectar_componentes_desaparecidos(linea, componentes, historial)
     resultados['cambios_nuevos'].extend(cambios_resueltos)
     
@@ -402,9 +394,8 @@ def limpiar_historial_antiguo(historial):
                 
                 if dias_transcurridos >= dias_limpiar_historial:
                     if es_obra_por_persistencia or not datos.get("es_obra_programada", False):
-                        tipo_entrada = "obra por persistencia" if es_obra_por_persistencia else datos.get("tipo", "desconocido")
                         claves_a_eliminar.append(clave)
-                        print(f"🗑️  Limpiando {tipo_entrada}: {clave} ({dias_transcurridos} días inactiva)")
+                        #print(f"Limpiando {tipo_entrada}: {clave} ({dias_transcurridos} días inactiva)")
     
     for clave in claves_a_eliminar:
         del historial[clave]
@@ -499,7 +490,6 @@ def procesar_estado_por_oraciones(estado_completo):
     
     return componentes
 
-
 def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar):
     """Envía una alerta por Telegram con los cambios detectados"""    
     if not (cambios_nuevos or obras_programadas or obras_renotificar):
@@ -513,7 +503,7 @@ def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar)
         for linea, obras in obras_programadas.items():
             for obra in obras:
                 mensaje += f"<b><u>{linea}:</u></b> {obra}\n"
-                # Verificar si alguna obra fue clasificada por persistencia
+                """verifico si alguna obra fue clasificada por persistencia"""
                 if "llegó a 5 apariciones" in obra:
                     tiene_obra_por_persistencia = True
     
@@ -544,7 +534,6 @@ def enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar)
     
     enviar_mensaje_telegram(mensaje)
 
-
 def enviar_mensaje_telegram(mensaje):
     """Envía un mensaje usando la API de Telegram"""
     url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
@@ -572,13 +561,11 @@ def enviar_mensaje_telegram(mensaje):
     # print(f"Mensaje: {mensaje}")
     return response
 
-
 def horarios_de_analisis():
     """Determino el horario de análisis
     horario de 6 am - 23 pm (definido desde config.py)
     """
     hora_actual = datetime.now().hour
-    #hora_actual = 24
     return (horario_analisis_inicio <= hora_actual <= horario_analisis_fin)
 
 def verificar_estados():
@@ -586,23 +573,16 @@ def verificar_estados():
     try:
         print(f"Iniciando verificación - {time.strftime('%Y-%m-%d %H:%M:%S')}")
         estados = obtener_estado_subte()  
+
         if not estados:
-            print("No se pudo obtener información de estados. Verificar estructura HTML.")
-            return
-           
-        if len(estados) == 1 and "estado_servicio" in estados and estados["estado_servicio"] == "Información no disponible":
-            print("El servicio de información de estados del subte no está disponible en este momento.")
-            enviar_mensaje_telegram("El sistema de información del subte no está disponible temporalmente.")
+            """Este es el caso en el que el estado es un diccionario vacio"""
             return
          
         cambios_nuevos, obras_programadas, obras_renotificar = analizar_cambios_con_historial(estados)
         if cambios_nuevos or obras_programadas or obras_renotificar:
             enviar_alerta_telegram(cambios_nuevos, obras_programadas, obras_renotificar)
-
         else:
-            print("Todo funciona normalmente (sin cambios que notificar).")
-
-            
+            print("Todo funciona normalmente (sin cambios que notificar).")  
 
     except Exception as e:
         print(f"Error: {e}")
@@ -615,7 +595,6 @@ def main():
     """Función principal que ejecuta el ciclo de verificación periódica"""   
     while True:
         hora_actual = datetime.now().hour
-        #hora_actual = 24
         if horarios_de_analisis():
             print(f"Nos encontramos dentro del horario de analisis - Hora actual {hora_actual} hs")
             verificar_estados()
