@@ -2,8 +2,6 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-
-
 telegram_token = os.getenv('TELEGRAM_TOKEN')
 telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
 
@@ -15,3 +13,5 @@ url_estado_subte = "https://aplicacioneswp.metrovias.com.ar/estadolineasEMOVA/de
 archivo_estado = "estados_persistentes.json"
 estado_normal = "Normal"
 estado_redundante = "Servicio finalizado"
+horario_analisis_inicio =  int(os.getenv('horario_analisis_inicio', 6))
+horario_analisis_fin =  int(os.getenv('horario_analisis_fin', 23))

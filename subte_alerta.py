@@ -33,7 +33,9 @@ load_dotenv()
 
 from config import (
     telegram_token, telegram_chat_id, estado_normal, url_estado_subte,
-    intervalo_ejecucion, umbral_obra_programada, dias_renotificar_obra, archivo_estado, estado_redundante, dias_limpiar_historial
+    intervalo_ejecucion, umbral_obra_programada, dias_renotificar_obra, 
+    archivo_estado, estado_redundante, dias_limpiar_historial,
+    horario_analisis_inicio, horario_analisis_fin
 )
 
 if not telegram_token:
@@ -257,7 +259,7 @@ def procesar_problema_individual(linea, problema, indice, historial):
             not historial[clave_problema]["es_obra_programada"]):
             # Se define como una obra por persistencia ya que no quiero recibir constantes notificaciones
             historial[clave_problema]["es_obra_programada"] = True
-            mensaje_obra = f"{problema}.\nEste problema llegó a 5 apariciones, por lo que solo se volverá a notificar cuando cambie de estado o en 15 días \n"
+            mensaje_obra = f"{problema}.\n \nEste problema llegó a 5 apariciones, por lo que solo se volverá a notificar cuando cambie de estado o en 15 días \n"
             return "convertido_a_obra", mensaje_obra
         elif not historial[clave_problema]["es_obra_programada"]:
             return "problema_continua", problema
@@ -448,6 +450,7 @@ def analizar_cambios_con_historial(estados_actuales):
 def procesar_estado_por_oraciones(estado_completo):
     """Procesa el estado completo dividiéndolo en oraciones y clasificándolas"""
 
+    """Son abreviaciones que utiliza EMOVA para la linea premetro"""
     texto = estado_completo.strip()
     texto = texto.replace('Int.Saguier', 'INTSAGUIER_TEMP')
     texto = texto.replace('Int. Saguier', 'INTSAGUIER_TEMP')
@@ -548,11 +551,31 @@ def enviar_mensaje_telegram(mensaje):
         "parse_mode": "HTML",
         "disable_web_page_preview": True
     }
-    response = requests.post(url, data=data)
-    print("📤 Mensaje enviado por Telegram")
+    try:
+        response = requests.post(url, data=data)
+        response.raise_for_status()
+        
+        if response.status_code == 200:
+            print("Mensaje enviado por Telegram exitosamente")
+        else:
+            print(f"Error al enviar mensaje por Telegram: Status {response.status_code}")
+            
+    except requests.exceptions.RequestException as e:
+        print(f"Error general al enviar mensaje por Telegram: {e}")
+    except Exception as e:
+        print(f"Error desconocido al enviar mensaje por Telegram: {e}")
+    
     # print(f"Mensaje: {mensaje}")
     return response
 
+
+def horarios_de_analisis():
+    """Determino el horario de análisis
+    horario de 6 am - 23 pm (definido desde config.py)
+    """
+    hora_actual = datetime.now().hour
+    #hora_actual = 24
+    return (horario_analisis_inicio <= hora_actual <= horario_analisis_fin)
 
 def verificar_estados():
     """Función principal que verifica los estados y envía alertas si es necesario"""
@@ -587,11 +610,26 @@ def verificar_estados():
 def main():
     """Función principal que ejecuta el ciclo de verificación periódica"""   
     while True:
-        verificar_estados()
+        hora_actual = datetime.now().hour
+        #hora_actual = 24
+        if horarios_de_analisis():
+            print(f"Nos encontramos dentro del horario de analisis - Hora actual {hora_actual} hs")
+            verificar_estados()
+            proxima_ejecucion = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time() + intervalo_ejecucion))
+            print(f"Esperando hasta la próxima ejecución ({proxima_ejecucion})...")
+            time.sleep(intervalo_ejecucion)
+
+        else:
+            if hora_actual < 6:
+                """me fijo cuantas horas faltan para las 6 am"""
+                horas_hasta_inicio = 6 - hora_actual
+            else: 
+                """me fijo cuantas horas faltan para las 6 am del día siguiente"""
+                horas_hasta_inicio = (24 - hora_actual) + 6
+               
+            print(f"Fuera del horario de análisis. Durmiendo {horas_hasta_inicio} horas hasta las 6 AM")
+            time.sleep(horas_hasta_inicio * 3600)
         
-        proxima_ejecucion = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time() + intervalo_ejecucion))
-        print(f"Esperando hasta la próxima ejecución ({proxima_ejecucion})...")
-        time.sleep(intervalo_ejecucion)
 
 if __name__ == "__main__":
     main()
