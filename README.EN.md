@@ -13,6 +13,10 @@ This project is an automated bot that monitors the status of Buenos Aires subway
 
 ## Main Features
 
+### Schedule system
+- **Intelligent wait calculation**: Automatically determines when to reactivate based on current time
+- **Optimized operation**: Works respecting defined schedules
+
 ### Detection 
 - **Scheduled works**: Automatically detects comprehensive renovation works and scheduled maintenance
 - **Incidents**: Identifies operational problems that require immediate attention
@@ -68,18 +72,17 @@ This project is an automated bot that monitors the status of Buenos Aires subway
    python subte_alerta.py
    ```
 
-## Advanced configuration
-
-- `INTERVALO_EJECUCION`: Check interval in seconds (default: 5400 = 1.5 hours)
-- `UMBRAL_OBRA_PROGRAMADA`: Consecutive detections to classify as scheduled work (default: 5)
-- `DIAS_RENOTIFICAR_OBRA`: Days between scheduled work reminders (default: 15)
-
 ## Environment variables
-
-| Variable | Description |
-|----------|-------------|
-| `TELEGRAM_TOKEN` | Your Telegram bot token |
-| `TELEGRAM_CHAT_ID` | Chat ID where alerts are sent |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `TELEGRAM_TOKEN` | Your Telegram bot token | - |
+| `TELEGRAM_CHAT_ID` | Chat ID where alerts are sent | - |
+| `intervalo_ejecucion` | Interval between checks (seconds) | 5400 |
+| `horario_analisis_inicio` | Monitoring start hour | 6 |
+| `horario_analisis_fin` | Monitoring end hour | 23 |
+| `umbral_obra_programada` | Detections to classify as work | 5 |
+| `dias_renotificar_obra` | Days between work reminders | 15 |
+| `dias_limpiar_historial` | Days to clean old history | 5 |
 
 ## Credits
 
