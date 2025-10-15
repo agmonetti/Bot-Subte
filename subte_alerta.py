@@ -38,18 +38,22 @@ from config import (
     horario_analisis_inicio, horario_analisis_fin
 )
 
-if not telegram_token:
-    print("Error: TELEGRAM_TOKEN no está configurado")
-    exit(1)
-
-if not telegram_chat_id:
-    print("Error: TELEGRAM_CHAT_ID no está configurado")
-    exit(1)
 
 # ========================
 # FUNCIONES DE PERSISTENCIA
 # ========================
 
+def verificar_tokens_telegram():
+    """Verifica que los tokens de Telegram estén configurados"""
+    if not telegram_token:
+        print("Error: TELEGRAM_TOKEN no está configurado")
+        exit(1)
+
+    if not telegram_chat_id:
+        print("Error: TELEGRAM_CHAT_ID no está configurado")
+        exit(1)
+
+verificar_tokens_telegram()
 
 def cargar_estados_anteriores():
     """Carga el estado anterior y el historial desde un archivo JSON"""
