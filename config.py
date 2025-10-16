@@ -6,7 +6,7 @@ load_dotenv()
 telegram_token = os.getenv('TELEGRAM_TOKEN')
 telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
 
-intervalo_ejecucion = int(os.getenv('intervalo_ejecucion', 5400))  # 1.5 horas
+intervalo_ejecucion = int(os.getenv('intervalo_ejecucion', 5400))  # 1.5 horas = 5400 segundos
 umbral_obra_programada = int(os.getenv('umbral_obra_programada', 5))
 dias_renotificar_obra = int(os.getenv('dias_renotificar_obra', 15))
 dias_limpiar_historial = int(os.getenv('dias_limpiar_historial', 5))
