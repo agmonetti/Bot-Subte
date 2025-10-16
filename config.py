@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from zoneinfo import ZoneInfo
 
 load_dotenv()
 telegram_token = os.getenv('TELEGRAM_TOKEN')
@@ -15,3 +16,4 @@ estado_normal = "Normal"
 estado_redundante = "Servicio finalizado"
 horario_analisis_inicio =  int(os.getenv('horario_analisis_inicio', 6))
 horario_analisis_fin =  int(os.getenv('horario_analisis_fin', 23))
+timezone_local = ZoneInfo('America/Argentina/Buenos_Aires')
