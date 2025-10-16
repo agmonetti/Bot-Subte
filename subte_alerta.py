@@ -35,7 +35,7 @@ from config import (
     telegram_token, telegram_chat_id, estado_normal, url_estado_subte,
     intervalo_ejecucion, umbral_obra_programada, dias_renotificar_obra, 
     archivo_estado, estado_redundante, dias_limpiar_historial,
-    horario_analisis_inicio, horario_analisis_fin
+    horario_analisis_inicio, horario_analisis_fin, timezone_local
 )
 
 
@@ -564,14 +564,15 @@ def enviar_mensaje_telegram(mensaje):
 def horarios_de_analisis():
     """Determino el horario de análisis
     horario de 6 am - 23 pm (definido desde config.py)
+    Usa timezone de Buenos Aires para evitar problemas con servidores UTC
     """
-    hora_actual = datetime.now().hour
+    hora_actual = datetime.now(timezone_local).hour
     return (horario_analisis_inicio <= hora_actual <= horario_analisis_fin)
 
 def verificar_estados():
     """Función principal que verifica los estados y envía alertas si es necesario"""
     try:
-        print(f"Iniciando verificación - {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Iniciando verificación - {datetime.now(timezone_local).strftime('%Y-%m-%d %H:%M:%S')}")
         estados = obtener_estado_subte()  
 
         if not estados:
@@ -594,7 +595,7 @@ def verificar_estados():
 def main():
     """Función principal que ejecuta el ciclo de verificación periódica"""   
     while True:
-        hora_actual = datetime.now().hour
+        hora_actual = datetime.now(timezone_local).hour
         if horarios_de_analisis():
             print(f"Nos encontramos dentro del horario de analisis - Hora actual {hora_actual} hs")
             verificar_estados()
