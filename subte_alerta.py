@@ -55,6 +55,10 @@ def verificar_tokens_telegram():
 
 verificar_tokens_telegram()
 
+def ahora_ba():
+    """Retorna la fecha y hora actual en timezone de Buenos Aires"""
+    return datetime.now(timezone_local)
+
 def cargar_estados_anteriores():
     """Carga el estado anterior y el historial desde un archivo JSON"""
     try:
@@ -70,7 +74,7 @@ def guardar_estados(estados_actuales, historial):
     """Guarda el estado actual y el historial en un archivo JSON"""
     try:
         data = {
-            "ultima_actualizacion": datetime.now().isoformat(),
+            "ultima_actualizacion": ahora_ba().isoformat(),
             "estados_actuales": estados_actuales,
             "historial": historial
         }
@@ -182,7 +186,7 @@ def procesar_obra_individual(linea, obra, indice, historial):
             "linea_original": linea,
             "tipo": "obra",
             "contador": 1,
-            "primera_deteccion": datetime.now().isoformat(),
+            "primera_deteccion": ahora_ba().isoformat(),
             "ultima_notificacion": None,
             "es_obra_programada": True,
             "detectada_por_texto": True,
@@ -197,7 +201,7 @@ def procesar_obra_individual(linea, obra, indice, historial):
         
         if not historial[clave_obra].get("activa", True):
             historial[clave_obra]["activa"] = True
-            historial[clave_obra]["fecha_reactivacion"] = datetime.now().isoformat()
+            historial[clave_obra]["fecha_reactivacion"] = ahora_ba().isoformat()
             return "reactivada_silenciosa", obra
             
         elif (historial[clave_obra]["es_obra_programada"] and 
@@ -205,7 +209,7 @@ def procesar_obra_individual(linea, obra, indice, historial):
             ultima_notif = historial[clave_obra]["ultima_notificacion"]
             if ultima_notif:
                 ultima_fecha = datetime.fromisoformat(ultima_notif)
-                if datetime.now() - ultima_fecha >= timedelta(days=dias_renotificar_obra):
+                if ahora_ba() - ultima_fecha >= timedelta(days=dias_renotificar_obra):
                     return "renotificar", obra
         return "continua", obra
     else:
@@ -215,7 +219,7 @@ def procesar_obra_individual(linea, obra, indice, historial):
             "linea_original": linea,
             "tipo": "obra",
             "contador": 1,
-            "primera_deteccion": datetime.now().isoformat(),
+            "primera_deteccion": ahora_ba().isoformat(),
             "ultima_notificacion": None,
             "es_obra_programada": True,
             "detectada_por_texto": True,
@@ -234,7 +238,7 @@ def procesar_problema_individual(linea, problema, indice, historial):
             "linea_original": linea,
             "tipo": "problema",
             "contador": 1,
-            "primera_deteccion": datetime.now().isoformat(),
+            "primera_deteccion": ahora_ba().isoformat(),
             "ultima_notificacion": None,
             "es_obra_programada": False,
             "detectada_por_texto": False,
@@ -248,7 +252,7 @@ def procesar_problema_individual(linea, problema, indice, historial):
         
         if not historial[clave_problema].get("activa", True):
             historial[clave_problema]["activa"] = True
-            historial[clave_problema]["fecha_reactivacion"] = datetime.now().isoformat()
+            historial[clave_problema]["fecha_reactivacion"] = ahora_ba().isoformat()
             return "problema_reactivado", problema
             
         if (historial[clave_problema]["contador"] >= umbral_obra_programada and 
@@ -267,7 +271,7 @@ def procesar_problema_individual(linea, problema, indice, historial):
             "linea_original": linea,
             "tipo": "problema",
             "contador": 1,
-            "primera_deteccion": datetime.now().isoformat(),
+            "primera_deteccion": ahora_ba().isoformat(),
             "ultima_notificacion": None,
             "es_obra_programada": False,
             "detectada_por_texto": False,
@@ -303,7 +307,7 @@ def detectar_componentes_desaparecidos(linea, componentes, historial):
                 del historial[clave]
             else:
                 historial[clave]["activa"] = False
-                historial[clave]["fecha_desaparicion"] = datetime.now().isoformat()
+                historial[clave]["fecha_desaparicion"] = ahora_ba().isoformat()
     
     return cambios_resueltos
 
@@ -366,7 +370,7 @@ def procesar_linea_normal(linea, historial):
 
 def actualizar_timestamps_notificacion(cambios_nuevos, obras_programadas, obras_renotificar, historial):
     """Actualiza los timestamps de notificación"""
-    ahora = datetime.now().isoformat()
+    ahora = ahora_ba().isoformat()
     
     for linea_dict in [cambios_nuevos, obras_programadas, obras_renotificar]:
         for linea in linea_dict.keys():
@@ -378,7 +382,7 @@ def limpiar_historial_antiguo(historial):
     """Elimina entradas inactivas después de X días, 
     incluyendo obras clasificadas por persistencia"""
     claves_a_eliminar = []
-    ahora = datetime.now()
+    ahora = ahora_ba()
     
     for clave, datos in historial.items():
         if not datos.get("activa", True):
