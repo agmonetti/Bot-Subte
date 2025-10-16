@@ -80,11 +80,13 @@ Este proyecto es un bot automatizado que monitorea el estado de las líneas del 
 | `TELEGRAM_TOKEN` | Token de tu bot de Telegram | - |
 | `TELEGRAM_CHAT_ID` | ID del chat donde envía alertas | - |
 | `intervalo_ejecucion` | Intervalo entre verificaciones (segundos) | 5400 |
-| `horario_analisis_inicio` | Hora de inicio del monitoreo | 6 |
-| `horario_analisis_fin` | Hora de fin del monitoreo | 23 |
+| `horario_analisis_inicio` | Hora de inicio del monitoreo (hora de Buenos Aires) | 6 |
+| `horario_analisis_fin` | Hora de fin del monitoreo (hora de Buenos Aires) | 23 |
 | `umbral_obra_programada` | Detecciones para clasificar como obra | 5 |
 | `dias_renotificar_obra` | Días entre recordatorios de obras | 15 |
 | `dias_limpiar_historial` | Días para limpiar historial antiguo | 5 |
+
+**Nota sobre zonas horarias:** El bot utiliza la zona horaria de Buenos Aires (America/Argentina/Buenos_Aires, UTC-3) para el monitoreo, independientemente de la zona horaria del servidor donde se ejecute. Esto asegura que los horarios configurados se respeten correctamente incluso cuando se despliega en servidores con zonas horarias diferentes (como Zeabur que usa UTC).
 
 ## Créditos
 
