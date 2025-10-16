@@ -594,24 +594,49 @@ def verificar_estados():
 def main():
     """Función principal que ejecuta el ciclo de verificación periódica"""   
     while True:
-        hora_actual = datetime.now().hour
+        ahora = datetime.now()
+        hora_actual = ahora.hour
+        
         if horarios_de_analisis():
             print(f"Nos encontramos dentro del horario de analisis - Hora actual {hora_actual} hs")
             verificar_estados()
-            proxima_ejecucion = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time() + intervalo_ejecucion))
-            print(f"Esperando hasta la próxima ejecución ({proxima_ejecucion})...")
-            time.sleep(intervalo_ejecucion)
+            
+            # Calcular la próxima ejecución
+            proxima_ejecucion_dt = ahora + timedelta(seconds=intervalo_ejecucion)
+            proxima_hora = proxima_ejecucion_dt.hour
+            
+            # Verificar si la próxima ejecución estará fuera del horario de análisis
+            if proxima_hora < horario_analisis_inicio or proxima_hora > horario_analisis_fin:
+                # Calcular tiempo exacto hasta las 6 AM del próximo día
+                manana = ahora + timedelta(days=1)
+                proxima_inicio = manana.replace(hour=horario_analisis_inicio, minute=0, second=0, microsecond=0)
+                segundos_hasta_inicio = int((proxima_inicio - ahora).total_seconds())
+                
+                proxima_ejecucion_str = proxima_inicio.strftime('%Y-%m-%d %H:%M:%S')
+                print(f"Próxima ejecución sería fuera del horario. Durmiendo hasta las {horario_analisis_inicio} AM: {proxima_ejecucion_str}")
+                time.sleep(segundos_hasta_inicio)
+            else:
+                # La próxima ejecución está dentro del horario de análisis
+                proxima_ejecucion_str = proxima_ejecucion_dt.strftime('%Y-%m-%d %H:%M:%S')
+                print(f"Esperando hasta la próxima ejecución ({proxima_ejecucion_str})...")
+                time.sleep(intervalo_ejecucion)
 
         else:
-            if hora_actual < 6:
-                """me fijo cuantas horas faltan para las 6 am"""
-                horas_hasta_inicio = 6 - hora_actual
-            else: 
-                """me fijo cuantas horas faltan para las 6 am del día siguiente"""
-                horas_hasta_inicio = (24 - hora_actual) + 6
-               
-            print(f"Fuera del horario de análisis. Durmiendo {horas_hasta_inicio} horas hasta las 6 AM")
-            time.sleep(horas_hasta_inicio * 3600)
+            # Calcular tiempo exacto hasta las 6 AM
+            if hora_actual < horario_analisis_inicio:
+                # Mismo día
+                proxima_inicio = ahora.replace(hour=horario_analisis_inicio, minute=0, second=0, microsecond=0)
+            else:
+                # Día siguiente
+                manana = ahora + timedelta(days=1)
+                proxima_inicio = manana.replace(hour=horario_analisis_inicio, minute=0, second=0, microsecond=0)
+            
+            segundos_hasta_inicio = int((proxima_inicio - ahora).total_seconds())
+            horas_hasta_inicio = segundos_hasta_inicio / 3600
+            proxima_ejecucion_str = proxima_inicio.strftime('%Y-%m-%d %H:%M:%S')
+            
+            print(f"Fuera del horario de análisis. Durmiendo {horas_hasta_inicio:.2f} horas hasta las {horario_analisis_inicio} AM: {proxima_ejecucion_str}")
+            time.sleep(segundos_hasta_inicio)
         
 
 if __name__ == "__main__":
