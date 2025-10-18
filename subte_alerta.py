@@ -614,7 +614,10 @@ def main():
             
             segundos_hasta_inicio = (proxima_ejecucion - ahora).total_seconds()
             print(f"Fuera del horario de análisis. Durmiendo hasta {proxima_ejecucion.strftime('%Y-%m-%d %H:%M:%S')} ({segundos_hasta_inicio/3600:.2f} horas)")
-            time.sleep(segundos_hasta_inicio)
+            if segundos_hasta_inicio > 0:
+                time.sleep(segundos_hasta_inicio)
+            else:
+                print(f"Advertencia: tiempo de espera calculado es {segundos_hasta_inicio}s, continuando inmediatamente")
         
 
 if __name__ == "__main__":
