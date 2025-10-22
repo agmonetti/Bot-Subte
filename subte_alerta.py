@@ -441,17 +441,36 @@ def analizar_cambios_con_historial(estados_actuales):
     guardar_estados(estados_para_procesar, historial)
     
     return cambios_nuevos, obras_programadas, obras_renotificar
-
 def procesar_estado_por_oraciones(estado_completo):
-    """Procesa el estado completo dividiéndolo en oraciones y clasificándolas"""
-
-    """Son abreviaciones que utiliza EMOVA para la linea premetro"""
-    texto = estado_completo.strip()
-    texto = texto.replace('Int.Saguier', 'INTSAGUIER_TEMP')
-    texto = texto.replace('Int. Saguier', 'INTSAGUIER_TEMP')
-    texto = texto.replace('Gral. Savio', 'GRALSAVIO_TEMP')
-    texto = texto.replace('Gral.Savio', 'GRALSAVIO_TEMP')
+    """Procesa el estado completo dividiéndolo en oraciones y clasificándolas
+       Fue necesario crear un diccionario de abreviaciones para evitar divisiones incorrectas
+    """
+    abreviaciones = {
+        'Int.Saguier': 'INTSAGUIER_TEMP',
+        'Int. Saguier': 'INTSAGUIER_TEMP',
+        'Gral. Savio': 'GRALSAVIO_TEMP',
+        'Gral.Savio': 'GRALSAVIO_TEMP',
+        'Av. de Mayo': 'AVDEMAYO_TEMP',
+        'Av.de Mayo': 'AVDEMAYO_TEMP',
+        'Av. La Plata': 'AVLAPLATA_TEMP',
+        'Av.La Plata': 'AVLAPLATA_TEMP',
+        'Gral. Paz': 'GRALPAZ_TEMP',
+        'Gral.Paz': 'GRALPAZ_TEMP',
+        'Gral. Urquiza': 'GRALURQUIZA_TEMP',
+        'Gral.Urquiza': 'GRALURQUIZA_TEMP',
+        'Gral. Belgrano': 'GRALBELGRANO_TEMP',
+        'Gral.Belgrano': 'GRALBELGRANO_TEMP',
+    }
     
+    """Tomamos el texto completo, reemplazamos las abreviaciones"""
+    texto = estado_completo.strip()
+    reverso = {}  
+
+    """En este bucle reemplazamos las abreviaciones por temporales"""
+    for original, temporal in abreviaciones.items():
+        texto = texto.replace(original, temporal)
+        reverso[temporal] = original
+       
     oraciones = re.split(r'\.\s+|\.$', texto)
     
     oraciones_finales = []
@@ -460,10 +479,13 @@ def procesar_estado_por_oraciones(estado_completo):
         if not oracion:
             continue
         
-        oracion = oracion.replace('INTSAGUIER_TEMP', 'Int.Saguier')
-        oracion = oracion.replace('GRALSAVIO_TEMP', 'Gral. Savio')
+        """Revertimos las abreviaciones temporales a su forma original"""
+        for temporal, original in reverso.items():
+            oracion = oracion.replace(temporal, original)
+        
         oraciones_finales.append(oracion)
     
+    '''Clasificamos las oraciones en obras, problemas y otros'''
     palabras_obra = [
         "obras de renovación integral", "renovación integral", 
         "obras de renovacion integral", "renovacion integral",
