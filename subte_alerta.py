@@ -460,6 +460,9 @@ def procesar_estado_por_oraciones(estado_completo):
         'Gral.Urquiza': 'GRALURQUIZA_TEMP',
         'Gral. Belgrano': 'GRALBELGRANO_TEMP',
         'Gral.Belgrano': 'GRALBELGRANO_TEMP',
+        'J.M. Rosas': 'JMROSAS_TEMP',
+        'J. M. Rosas': 'JMROSAS_TEMP',
+        'J.M.Rosas': 'JMROSAS_TEMP',
     }
     
     """Tomamos el texto completo, reemplazamos las abreviaciones"""
