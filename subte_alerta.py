@@ -178,9 +178,14 @@ def normalizar_obra(texto_obra):
     normalizado = texto_obra.lower().strip()
     
     # Eliminar palabras que a menudo varían sin cambiar el significado
+    # Ordenadas de más larga a más corta para evitar reemplazos parciales
     palabras_a_remover = [
-        'estaciones ', 'estacion ', 'estación ',
-        'la estacion ', 'la estación ', 'las estaciones '
+        'las estaciones ',
+        'la estación ',
+        'la estacion ',
+        'estaciones ',
+        'estación ',
+        'estacion ',
     ]
     
     for palabra in palabras_a_remover:
