@@ -171,9 +171,58 @@ def obtener_estado_subte():
 # FUNCIONES DE ANALISIS DE CAMBIOS
 # =================================
 
+def normalizar_obra(texto_obra):
+    """Normaliza el texto de una obra para comparación,
+    eliminando variaciones menores que no cambian el significado"""
+    # Convertir a minúsculas para comparación insensible a mayúsculas
+    normalizado = texto_obra.lower().strip()
+    
+    # Eliminar palabras que a menudo varían sin cambiar el significado
+    # Ordenadas de más larga a más corta para evitar reemplazos parciales
+    palabras_a_remover = [
+        'las estaciones ',
+        'la estación ',
+        'la estacion ',
+        'estaciones ',
+        'estación ',
+        'estacion ',
+    ]
+    
+    for palabra in palabras_a_remover:
+        normalizado = normalizado.replace(palabra, '')
+    
+    # Normalizar espacios múltiples
+    normalizado = ' '.join(normalizado.split())
+    
+    return normalizado
+
+def buscar_obra_similar(linea, obra, historial):
+    """Busca si existe una obra similar en el historial para la misma línea"""
+    obra_normalizada = normalizar_obra(obra)
+    
+    # Buscar todas las claves de obras de esta línea
+    for clave, datos in historial.items():
+        if (datos.get("linea_original") == linea and 
+            datos.get("tipo") == "obra" and
+            datos.get("activa", True)):
+            
+            estado_existente = datos.get("estado", "")
+            if normalizar_obra(estado_existente) == obra_normalizada:
+                return clave
+    
+    return None
+
 def procesar_obra_individual(linea, obra, indice, historial):
     """Procesa una obra individual y determina su estado"""
-    clave_obra = f"{linea}_obra_{indice}" if indice > 0 else f"{linea}_obra"
+    # Buscar primero si existe una obra similar ya registrada
+    clave_similar = buscar_obra_similar(linea, obra, historial)
+    
+    if clave_similar:
+        # Usar la clave de la obra similar existente
+        clave_obra = clave_similar
+    else:
+        # Crear nueva clave si no hay obra similar
+        clave_obra = f"{linea}_obra_{indice}" if indice > 0 else f"{linea}_obra"
     
     if clave_obra not in historial:
         """aparece una nueva obra"""
@@ -191,38 +240,45 @@ def procesar_obra_individual(linea, obra, indice, historial):
         }
         return "nueva_obra", obra
         
-    elif historial[clave_obra]["estado"] == obra:
-        """la obra sigue estando"""
-        historial[clave_obra]["contador"] += 1
-        
-        if not historial[clave_obra].get("activa", True):
-            historial[clave_obra]["activa"] = True
-            historial[clave_obra]["fecha_reactivacion"] = datetime.now(timezone_local).isoformat()
-            return "reactivada_silenciosa", obra
-            
-        elif (historial[clave_obra]["es_obra_programada"] and 
-              historial[clave_obra].get("ya_notificada", False)):
-            ultima_notif = historial[clave_obra]["ultima_notificacion"]
-            if ultima_notif:
-                ultima_fecha = datetime.fromisoformat(ultima_notif)
-                if datetime.now(timezone_local) - ultima_fecha >= timedelta(days=dias_renotificar_obra):
-                    return "renotificar", obra
-        return "continua", obra
     else:
-        """significa que la obra cambio"""
-        historial[clave_obra] = {
-            "estado": obra,
-            "linea_original": linea,
-            "tipo": "obra",
-            "contador": 1,
-            "primera_deteccion": datetime.now(timezone_local).isoformat(),
-            "ultima_notificacion": None,
-            "es_obra_programada": True,
-            "detectada_por_texto": True,
-            "activa": True,
-            "ya_notificada": True
-        }
-        return "obra_cambiada", obra
+        # La obra ya existe (ya sea por clave exacta o por similitud)
+        obra_normalizada = normalizar_obra(obra)
+        estado_existente_normalizado = normalizar_obra(historial[clave_obra]["estado"])
+        
+        if obra_normalizada == estado_existente_normalizado:
+            """la obra sigue estando (texto similar)"""
+            historial[clave_obra]["contador"] += 1
+            # Actualizar el estado con el texto actual (puede tener pequeñas variaciones)
+            historial[clave_obra]["estado"] = obra
+            
+            if not historial[clave_obra].get("activa", True):
+                historial[clave_obra]["activa"] = True
+                historial[clave_obra]["fecha_reactivacion"] = datetime.now(timezone_local).isoformat()
+                return "reactivada_silenciosa", obra
+                
+            elif (historial[clave_obra]["es_obra_programada"] and 
+                  historial[clave_obra].get("ya_notificada", False)):
+                ultima_notif = historial[clave_obra]["ultima_notificacion"]
+                if ultima_notif:
+                    ultima_fecha = datetime.fromisoformat(ultima_notif)
+                    if datetime.now(timezone_local) - ultima_fecha >= timedelta(days=dias_renotificar_obra):
+                        return "renotificar", obra
+            return "continua", obra
+        else:
+            """significa que la obra cambio significativamente"""
+            historial[clave_obra] = {
+                "estado": obra,
+                "linea_original": linea,
+                "tipo": "obra",
+                "contador": 1,
+                "primera_deteccion": datetime.now(timezone_local).isoformat(),
+                "ultima_notificacion": None,
+                "es_obra_programada": True,
+                "detectada_por_texto": True,
+                "activa": True,
+                "ya_notificada": True
+            }
+            return "obra_cambiada", obra
 
 def procesar_problema_individual(linea, problema, indice, historial):
     """Procesa un problema individual y determina su estado"""
