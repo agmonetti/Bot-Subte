@@ -519,6 +519,8 @@ def procesar_estado_por_oraciones(estado_completo):
         'J.M. Rosas': 'JMROSAS_TEMP',
         'J. M. Rosas': 'JMROSAS_TEMP',
         'J.M.Rosas': 'JMROSAS_TEMP',
+        'Leandro N. Alem': 'LEANDRONALEM_TEMP',
+        'Leandro N.Alem': 'LEANDRONALEM_TEMP',
     }
     
     """Tomamos el texto completo, reemplazamos las abreviaciones"""
@@ -527,8 +529,9 @@ def procesar_estado_por_oraciones(estado_completo):
 
     """En este bucle reemplazamos las abreviaciones por temporales"""
     for original, temporal in abreviaciones.items():
-        texto = texto.replace(original, temporal)
-        reverso[temporal] = original
+        if original in texto:
+            texto = texto.replace(original, temporal)
+            reverso[temporal] = original
        
     oraciones = re.split(r'\.\s+|\.$', texto)
     
