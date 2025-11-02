@@ -342,6 +342,7 @@ def detectar_componentes_desaparecidos(linea, componentes, historial):
         tipo_componente = historial[clave]["tipo"]
         estado_componente = historial[clave]["estado"]
         es_obra_programada = historial[clave].get("es_obra_programada", False)
+        detectada_por_texto = historial[clave].get("detectada_por_texto", True)
         
         componente_aun_presente = False
         
@@ -351,12 +352,19 @@ def detectar_componentes_desaparecidos(linea, componentes, historial):
             componente_aun_presente = estado_componente in componentes['problemas']
         
         if not componente_aun_presente:
+            # Problemas que NO son obra programada: eliminar inmediatamente
             if tipo_componente == "problema" and not es_obra_programada:
                 cambios_resueltos.append(f"Problema resuelto: {estado_componente}")
                 del historial[clave]
+            # Obras que NO son obra programada: eliminar inmediatamente
             elif tipo_componente == "obra" and not es_obra_programada:
                 cambios_resueltos.append(f"Obra finalizada: {estado_componente}")
                 del historial[clave]
+            # Problemas clasificados como obra por persistencia: eliminar inmediatamente
+            elif tipo_componente == "problema" and es_obra_programada and not detectada_por_texto:
+                cambios_resueltos.append(f"Problema resuelto: {estado_componente}")
+                del historial[clave]
+            # Solo obras reales detectadas por texto se marcan como inactivas
             else:
                 historial[clave]["activa"] = False
                 historial[clave]["fecha_desaparicion"] = datetime.now(timezone_local).isoformat()
