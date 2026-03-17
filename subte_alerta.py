@@ -164,7 +164,18 @@ def obtener_estado_subte():
     except Exception as e:
         print(f"Error al obtener estados con Selenium: {e}")
         if driver:
-            driver.quit()
+            try:
+                driver.quit()
+            except:
+                pass
+        """forzamos la limpieza de procesos huerfanos en linux"""
+        try:
+            print("Ejecutando recolector de basura: limpiando procesos zombies de Chrome...")
+            os.system("pkill -f chrome")
+            os.system("pkill -f chromedriver")
+        except Exception as kill_e:
+            print(f"Error al ejecutar pkill: {kill_e}")
+            
         return {}
 
 # =================================
@@ -533,7 +544,7 @@ def procesar_estado_por_oraciones(estado_completo):
             texto = texto.replace(original, temporal)
             reverso[temporal] = original
        
-    oraciones = re.split(r'\.\s+|\.$', texto)
+    oraciones = re.split(r'\.\s+|\.$|\n+', texto)
     
     oraciones_finales = []
     for oracion in oraciones:
