@@ -1,9 +1,12 @@
-import requests
-from bs4 import BeautifulSoup
+import os
 import sys
 from pathlib import Path
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 
-# Se asegura la resolución del path raíz para importar config correctamente
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.append(str(BASE_DIR))
@@ -11,39 +14,48 @@ if str(BASE_DIR) not in sys.path:
 from src.config import Config
 
 def obtener_estado_subte():
-    """Obtiene el estado actual del subte utilizando peticiones estáticas."""
+    """Obtiene el estado actual del subte usando Selenium en modo headless."""
     estados = {}
+    driver = None
     
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
-
     try:
-        print(f"Obteniendo datos de: {Config.URL_ESTADO_SUBTE}")
-        response = requests.get(Config.URL_ESTADO_SUBTE, headers=headers, timeout=15)
-        response.raise_for_status()
+        chrome_options = Options()
+        chrome_options.add_argument('--headless')
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
-        soup = BeautifulSoup(response.text, 'html.parser')
+        is_docker = os.path.exists('/.dockerenv') or os.getenv('CHROME_BIN')
+        
+        if is_docker:
+            chrome_options.binary_location = '/usr/bin/chromium'
+            service = webdriver.ChromeService(executable_path='/usr/bin/chromedriver')
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+        else:
+            driver = webdriver.Chrome(options=chrome_options)
 
-        # Verificar si el sistema reporta fuera de servicio global
-        sin_servicio = soup.find(id="divSinservicio")
-        if sin_servicio and not sin_servicio.has_attr('hidden'):
+        print(f"Navegando a: {Config.URL_ESTADO_SUBTE}")
+        driver.get(Config.URL_ESTADO_SUBTE)
+
+        wait = WebDriverWait(driver, 15)
+        wait.until(lambda d: len(d.find_elements(By.CSS_SELECTOR, "#estadoLineasContainer .row:last-child .col")) >= 7)
+
+        sin_servicio = driver.find_elements(By.ID, "divSinservicio")
+        if sin_servicio and not sin_servicio[0].get_attribute("hidden"):
             print("El sistema de información del subte no está disponible.")
+            driver.quit()
             return {}
-
-        columnas = soup.select("#estadoLineasContainer .row:last-child .col")
+        
+        columnas = driver.find_elements(By.CSS_SELECTOR, "#estadoLineasContainer .row:last-child .col")
         lineas_subte = ['A', 'B', 'C', 'D', 'E', 'H', 'Premetro']
-
+        
         for i, columna in enumerate(columnas):
             try:
-                img = columna.find("img")
-                alt_text = img.get("alt") if img else None
-                p_elemento = columna.find("p")
-                
-                if not p_elemento:
-                    continue
-                    
-                estado_texto = p_elemento.get_text(strip=True)
+                img = columna.find_element(By.CSS_SELECTOR, "img")
+                alt_text = img.get_attribute("alt")
+                p_elemento = columna.find_element(By.CSS_SELECTOR, "p")
+                estado_texto = p_elemento.text.strip()
 
                 if alt_text and alt_text.strip():
                     nombre_linea = alt_text.strip()
@@ -61,14 +73,23 @@ def obtener_estado_subte():
                 continue
 
         if not estados:
-            print("No se pudo extraer información válida. Reintentando en el próximo ciclo.")
-            return {}
+            print("No se pudo acceder al estado del subte. Reintentando mas tarde.")
         
+        driver.quit()
         return estados
-
-    except requests.RequestException as e:
-        print(f"Error de red al conectar con el servidor: {e}")
-        return {}
+        
     except Exception as e:
-        print(f"Error inesperado en el procesamiento HTML: {e}")
+        print(f"Error al obtener estados con Selenium: {e}")
+        if driver:
+            try:
+                driver.quit()
+            except:
+                pass
+        try:
+            print("Ejecutando recolector de basura: limpiando procesos zombies de Chrome...")
+            os.system("pkill -f chrome")
+            os.system("pkill -f chromedriver")
+        except Exception as kill_e:
+            print(f"Error al ejecutar pkill: {kill_e}")
+            
         return {}
