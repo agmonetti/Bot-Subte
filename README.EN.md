@@ -11,28 +11,50 @@ This project is an automated bot that monitors the status of Buenos Aires subway
 - **Differentiated alerts**: Sends different types of messages according to the nature of the problem.
 - Checking is performed periodically (by default, every 1.5 hours).
 
+## Project Architecture
+
+The code is modularly structured to separate extraction, analysis, storage, and notification responsibilities:
+
+```text
+├── src/
+│   ├── config.py                  # Environment variables and global constants
+│   ├── main.py                    # Orchestrator and main loop
+│   ├── data/
+│   │   └── estados_persistentes.json # Dynamic alert history
+│   └── services/
+│       ├── __init__.py            # Services public interface
+│       ├── scrapper.py            # Web scraping with Selenium
+│       ├── analyzer.py            # Business logic and text parsing
+│       ├── storage.py             # JSON file Input/Output
+│       └── telegram_notifier.py   # Telegram API integration
+├── .env                           # Local credentials (not versioned)
+├── docker-compose.yml             # Infrastructure deployment
+├── Dockerfile                     # Image recipe with Chromium
+└── requirements.txt               # Python dependencies manifest
+```
+
 ## Main Features
 
 ### Schedule system
-- **Intelligent wait calculation**: Automatically determines when to reactivate based on current time
-- **Optimized operation**: Works respecting defined schedules
+- **Intelligent wait calculation**: Automatically determines when to reactivate based on current time.
+- **Optimized operation**: Works respecting defined schedules.
 
 ### Detection 
-- **Scheduled works**: Automatically detects comprehensive renovation works and scheduled maintenance
-- **Incidents**: Identifies operational problems that require immediate attention
-- **Service recovery**: Notifies when lines return to normal operation
-- **Multiple components**: Can detect works, problems and additional information on the same line
+- **Scheduled works**: Automatically detects comprehensive renovation works and scheduled maintenance.
+- **Incidents**: Identifies operational problems that require immediate attention.
+- **Service recovery**: Notifies when lines return to normal operation.
+- **Multiple components**: Can detect works, problems and additional information on the same line.
 
 ### History system
-- Saves the status of each line in `estados_persistentes.json`
-- Counts consecutive detections to classify persistent problems
-- Prevents notification spam for the same problem
+- Saves the status of each line in `src/data/estados_persistentes.json`.
+- Counts consecutive detections to classify persistent problems.
+- Prevents notification spam for the same problem.
 
 ### Differentiated alerts
-- **Urgent alerts**: For new incidents or operational problems
-- **Work notifications**: For scheduled works (one time only)
-- **Reminders**: For long-duration works (every 15 days)
-- **Additional information**: For special schedules and complementary details
+- **Urgent alerts**: For new incidents or operational problems.
+- **Work notifications**: For scheduled works (one time only).
+- **Reminders**: For long-duration works (every 15 days).
+- **Additional information**: For special schedules and complementary details.
 
 ## Requirements
 
@@ -41,48 +63,16 @@ This project is an automated bot that monitors the status of Buenos Aires subway
 - A Telegram bot and the chat ID where to send alerts
 - Local / Cloud hosting
 
-## Installation and usage
-
-### Option 1: Docker (Recommended)
-
-1. Clone this repository.
-2. Create a `.env` file with your credentials:
-   ```env
-   TELEGRAM_TOKEN=your_token_here
-   TELEGRAM_CHAT_ID=your_chat_id_here
-   ```
-3. Build the image:
-   ```sh
-   docker build -t bot-subte .
-   ```
-4. Run the container:
-   ```sh
-   docker run --rm bot-subte
-   ```
-
-### Option 2: Manual
-
-1. Install dependencies:
-   ```sh
-   pip install -r requirements.txt
-   ```
-2. Create a `.env` file with your credentials (see example above)
-3. Run the bot:
-   ```sh
-   python subte_alerta.py
-   ```
-
 ## Environment variables
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `TELEGRAM_TOKEN` | Your Telegram bot token | - |
-| `TELEGRAM_CHAT_ID` | Chat ID where alerts are sent | - |
-| `intervalo_ejecucion` | Interval between checks (seconds) | 5400 |
-| `horario_analisis_inicio` | Monitoring start hour (Buenos Aires time) | 6 |
-| `horario_analisis_fin` | Monitoring end hour (Buenos Aires time) | 23 |
-| `umbral_obra_programada` | Detections to classify as work | 5 |
-| `dias_renotificar_obra` | Days between work reminders | 15 |
-| `dias_limpiar_historial` | Days to clean old history | 5 |
+
+* `TELEGRAM_TOKEN`: Your Telegram bot token. (Required)
+* `TELEGRAM_CHAT_ID`: Chat ID where alerts are sent. (Required)
+* `INTERVALO_EJECUCION`: Interval between checks in seconds. (Default: 5400)
+* `HORARIO_ANALISIS_INICIO`: Monitoring start hour, local time. (Default: 6)
+* `HORARIO_ANALISIS_FIN`: Monitoring end hour, local time. (Default: 23)
+* `UMBRAL_OBRA_PROGRAMADA`: Consecutive detections to classify as work. (Default: 5)
+* `DIAS_RENOTIFICAR_OBRA`: Days between work reminders. (Default: 15)
+* `DIAS_LIMPIAR_HISTORIAL`: Inactive days to remove a record from history. (Default: 5)
 
 **Note on timezones:** The bot uses Buenos Aires timezone (America/Argentina/Buenos_Aires, UTC-3) for monitoring, regardless of the server's timezone where it runs. This ensures that the configured hours are respected correctly even when deployed on servers with different timezones (like Zeabur which uses UTC).
 
