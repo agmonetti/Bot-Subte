@@ -35,10 +35,6 @@ The code is modularly structured to separate extraction, analysis, storage, and 
 
 ## Main Features
 
-### Schedule system
-- **Intelligent wait calculation**: Automatically determines when to reactivate based on current time.
-- **Optimized operation**: Works respecting defined schedules.
-
 ### Detection 
 - **Scheduled works**: Automatically detects comprehensive renovation works and scheduled maintenance.
 - **Incidents**: Identifies operational problems that require immediate attention.
@@ -55,13 +51,6 @@ The code is modularly structured to separate extraction, analysis, storage, and 
 - **Work notifications**: For scheduled works (one time only).
 - **Reminders**: For long-duration works (every 15 days).
 - **Additional information**: For special schedules and complementary details.
-
-## Requirements
-
-- Python 3.10+
-- Docker (optional, recommended for easier execution)
-- A Telegram bot and the chat ID where to send alerts
-- Local / Cloud hosting
 
 ## Environment variables
 
@@ -81,7 +70,7 @@ The code is modularly structured to separate extraction, analysis, storage, and 
 - Developed by Agustin Monetti.
 - Based on public information from EMOVA.
 - GitHub: [@agmonetti](https://github.com/agmonetti)
-- Email: agmonetti@uade.edu.ar
+- Email: agus.monetti01@gmail.com
 
 ---
 
