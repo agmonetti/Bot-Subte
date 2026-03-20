@@ -35,10 +35,6 @@ El código está estructurado de manera modular para separar las responsabilidad
 
 ## Características principales
 
-### Sistema de horarios
-- **Cálculo inteligente de espera**: Determina automáticamente cuándo reactivarse según la hora actual.
-- **Operación optimizada**: Funciona respetando los horarios definidos.
-
 ### Detección 
 - **Obras programadas**: Detecta automáticamente obras de renovación integral y mantenimientos programados.
 - **Incidentes**: Identifica problemas operativos que requieren atención inmediata.
@@ -55,13 +51,6 @@ El código está estructurado de manera modular para separar las responsabilidad
 - **Notificaciones de obras**: Para obras programadas (una sola vez).
 - **Recordatorios**: Para obras de larga duración (cada 15 días).
 - **Información adicional**: Para horarios especiales y detalles complementarios.
-
-## Requisitos
-
-- Python 3.10+
-- Docker (opcional, recomendado para facilitar la ejecución)
-- Un bot de Telegram y el ID de chat donde enviar las alertas
-- Hosteo local / Nube
 
 ## Variables de entorno
 
@@ -81,7 +70,7 @@ El código está estructurado de manera modular para separar las responsabilidad
 - Desarrollado por Agustin Monetti.
 - Basado en información pública de EMOVA.
 - GitHub: [@agmonetti](https://github.com/agmonetti)
-- Email: agmonetti@uade.edu.ar
+- Email: agus.monetti01@gmail.com
 
 ---
 
