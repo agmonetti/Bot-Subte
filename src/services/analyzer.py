@@ -21,7 +21,10 @@ def procesar_estado_por_oraciones(estado_completo):
         'Gral. Belgrano': 'GRALBELGRANO_TEMP', 'Gral.Belgrano': 'GRALBELGRANO_TEMP',
         'J.M. Rosas': 'JMROSAS_TEMP', 'J. M. Rosas': 'JMROSAS_TEMP',
         'J.M.Rosas': 'JMROSAS_TEMP', 'Leandro N. Alem': 'LEANDRONALEM_TEMP',
-        'Leandro N.Alem': 'LEANDRONALEM_TEMP',
+        'Leandro N.Alem': 'LEANDRONALEM_TEMP', 'C.DE TUCUMÁN': 'CTUCUMAN_TEMP',
+        'C. DE TUCUMÁN': 'CTUCUMAN_TEMP', 'C. de Tucumán': 'CTUCUMAN_TEMP',
+        'C. De Tucumán': 'CTUCUMAN_TEMP', 'C. DE TUCUMAN': 'CTUCUMAN_TEMP',
+        'C. de Tucuman': 'CTUCUMAN_TEMP'
     }
     
     texto = estado_completo.strip()
