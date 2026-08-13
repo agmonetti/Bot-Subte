@@ -1,7 +1,5 @@
 import pytest
 import requests
-
-from src.services.storage import guardar_estados
 from src.services.telegram_bot import (
     escuchar_comandos,
     formatear_estado_actual,
@@ -25,6 +23,11 @@ class TestFormatearEstadoActual:
             assert f"<b>{linea}:</b>" in texto
         assert "<b>C:</b> sin datos disponibles" in texto
 
+    def test_acepta_claves_con_prefijo_linea(self):
+        texto = formatear_estado_actual({"Línea A": "Normal", "Linea B": "Demorada"})
+        assert "<b>A:</b> Normal" in texto
+        assert "<b>B:</b> Demorada" in texto
+
 
 class TestObtenerRespuestaEstado:
     def test_usa_estado_scrapeado(self, monkeypatch):
@@ -36,11 +39,10 @@ class TestObtenerRespuestaEstado:
         assert "<b>A:</b> Normal" in texto
         assert "<b>B:</b> Cerrada por obras" in texto
 
-    def test_fallback_a_estado_persistido(self, monkeypatch, tmp_config):
+    def test_sin_scrapeo_exitoso_no_usa_estado_persistido(self, monkeypatch, tmp_config):
         monkeypatch.setattr("src.services.telegram_bot.obtener_estado_subte", lambda: {})
-        guardar_estados({"A": "Normal"}, {}, "2026-08-13T10:00:00-03:00")
         texto = obtener_respuesta_estado()
-        assert "<b>A:</b> Normal" in texto
+        assert "No se pudo obtener el estado del subte" in texto
 
     def test_sin_datos_devuelve_mensaje_de_error(self, monkeypatch, tmp_config):
         monkeypatch.setattr("src.services.telegram_bot.obtener_estado_subte", lambda: {})

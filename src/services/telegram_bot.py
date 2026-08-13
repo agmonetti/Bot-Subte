@@ -10,8 +10,19 @@ if str(BASE_DIR) not in sys.path:
 
 from src.config import Config
 from src.services.scrapper import obtener_estado_subte
-from src.services.storage import cargar_estados_anteriores
 from src.services.telegram_notifier import enviar_mensaje_telegram
+
+def _obtener_estado_linea(estados, linea):
+    variantes = (
+        linea,
+        f"Línea {linea}",
+        f"Linea {linea}",
+    )
+    for clave in variantes:
+        estado = estados.get(clave)
+        if estado:
+            return estado
+    return None
 
 def formatear_estado_actual(estados):
     """Formatea el estado crudo de cada línea sin truncar oraciones."""
@@ -19,7 +30,7 @@ def formatear_estado_actual(estados):
     lineas = ['A', 'B', 'C', 'D', 'E', 'H', 'Premetro']
 
     for linea in lineas:
-        estado = estados.get(linea)
+        estado = _obtener_estado_linea(estados, linea)
         if estado:
             mensaje += f"<b>{linea}:</b> {estado}\n"
         else:
@@ -28,15 +39,10 @@ def formatear_estado_actual(estados):
     return mensaje
 
 def obtener_respuesta_estado():
-    """Devuelve el estado actual, con fallback al último estado persistido."""
+    """Devuelve el estado actual obtenido al momento del comando."""
     estados = obtener_estado_subte()
     if estados:
         return formatear_estado_actual(estados)
-
-    data_anterior = cargar_estados_anteriores()
-    estados_persistidos = data_anterior.get("estados_actuales", {})
-    if estados_persistidos:
-        return formatear_estado_actual(estados_persistidos)
 
     return "No se pudo obtener el estado del subte en este momento."
 
