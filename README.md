@@ -9,6 +9,7 @@ Este proyecto es un bot automatizado que monitorea el estado de las líneas del 
 - **Procesamiento granular**: Analiza cada oración independientemente para detectar múltiples componentes por línea.
 - **Persistencia de estados**: Mantiene un historial de problemas para evitar notificaciones repetitivas.
 - **Alertas diferenciadas**: Envía diferentes tipos de mensajes según la naturaleza del problema.
+- **Comando `/estado`**: El bot responde a `/estado` con el estado actual de todas las líneas (texto completo, sin cortar oraciones). Corre en un hilo separado, sin interrumpir el intervalo de verificación.
 - El chequeo se realiza de manera periódica (por defecto, cada 1.5 horas).
 
 ## Arquitectura del Proyecto
@@ -62,6 +63,9 @@ El código está estructurado de manera modular para separar las responsabilidad
 * `UMBRAL_OBRA_PROGRAMADA`: Detecciones consecutivas para clasificar como obra. (Por defecto: 5)
 * `DIAS_RENOTIFICAR_OBRA`: Días entre recordatorios de obras. (Por defecto: 15)
 * `DIAS_LIMPIAR_HISTORIAL`: Días inactivos para borrar un registro del historial. (Por defecto: 5)
+* `COMANDO_ESTADO`: Comando para consultar el estado actual. (Por defecto: `/estado`)
+* `POLLING_TIMEOUT`: Timeout del long-polling de Telegram en segundos. (Por defecto: 25)
+* `POLLING_INTERVALO`: Espera entre ciclos de polling en segundos. (Por defecto: 1)
 
 **Nota sobre zonas horarias:** El bot utiliza la zona horaria de Buenos Aires (America/Argentina/Buenos_Aires, UTC-3) para el monitoreo, independientemente de la zona horaria del servidor donde se ejecute. Esto asegura que los horarios configurados se respeten correctamente incluso cuando se despliega en servidores con zonas horarias diferentes (como Zeabur que usa UTC).
 

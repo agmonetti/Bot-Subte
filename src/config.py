@@ -22,6 +22,10 @@ class Config:
     HORARIO_ANALISIS_INICIO = int(os.getenv('HORARIO_ANALISIS_INICIO', 6))
     HORARIO_ANALISIS_FIN = int(os.getenv('HORARIO_ANALISIS_FIN', 23))
 
+    COMANDO_ESTADO = os.getenv('COMANDO_ESTADO', '/estado')
+    POLLING_TIMEOUT = int(os.getenv('POLLING_TIMEOUT', 25))
+    POLLING_INTERVALO = int(os.getenv('POLLING_INTERVALO', 1))
+
     URL_ESTADO_SUBTE = "https://aplicacioneswp.metrovias.com.ar/estadolineasEMOVA/desktopEmova.html"
     ESTADO_NORMAL = "Normal"
     ESTADO_REDUNDANTE = "Servicio finalizado"

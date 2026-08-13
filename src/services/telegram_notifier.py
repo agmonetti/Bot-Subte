@@ -9,11 +9,11 @@ if str(BASE_DIR) not in sys.path:
 
 from src.config import Config
 
-def enviar_mensaje_telegram(mensaje):
+def enviar_mensaje_telegram(mensaje, chat_id=None):
     """Ejecuta la petición HTTP contra la API de Telegram."""
     url = f"https://api.telegram.org/bot{Config.TELEGRAM_TOKEN}/sendMessage"
     data = {
-        "chat_id": Config.TELEGRAM_CHAT_ID,
+        "chat_id": chat_id or Config.TELEGRAM_CHAT_ID,
         "text": mensaje,
         "parse_mode": "HTML",
         "disable_web_page_preview": True

@@ -1,5 +1,6 @@
 import time
 import sys
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -14,7 +15,8 @@ from src.services import (
     cargar_estados_anteriores,
     guardar_estados,
     analizar_cambios_con_historial,
-    enviar_alerta_telegram
+    enviar_alerta_telegram,
+    escuchar_comandos
 )
 
 def horarios_de_analisis():
@@ -55,6 +57,9 @@ def verificar_estados():
 def main():
     """Bucle principal de ejecución y control de tiempos."""
     print("Iniciando servicio Bot-Subte...")
+
+    hilo_bot = threading.Thread(target=escuchar_comandos, daemon=True)
+    hilo_bot.start()
     
     while True:
         ahora = datetime.now(Config.TIMEZONE_LOCAL)
